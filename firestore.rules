@@ -1,0 +1,34 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Game document: public read for lobby/spectators, write only via server
+    match /games/{gameId} {
+      allow read: if true;
+      allow write: if false; // server-only via admin SDK
+
+      // Player hands: only the owning player can read their own hand
+      match /hands/{uid} {
+        allow read: if request.auth != null && request.auth.uid == uid;
+        allow write: if false; // server-only
+      }
+
+      // Decks: server-only, no client access
+      match /decks/{uid} {
+        allow read, write: if false;
+      }
+    }
+
+    // Scoreboard: public read, server-only write
+    match /scoreboard/{entry} {
+      allow read: if true;
+      allow write: if false; // server-only
+    }
+
+    // Deny everything else
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
