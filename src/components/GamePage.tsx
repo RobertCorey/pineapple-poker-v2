@@ -1,11 +1,15 @@
 import { useState, useCallback, useEffect } from 'react';
+import { httpsCallable } from 'firebase/functions';
 import type { GameState, Card, Row } from '../../shared/types.ts';
 import { GamePhase } from '../../shared/types.ts';
-import type { ScoreEntry } from '../hooks/useScoreboard.ts';
+import { functions } from '../firebase.ts';
 import { PlayerGrid } from './PlayerGrid.tsx';
 import { HandPanel, type Placement } from './HandPanel.tsx';
-import { Scoreboard } from './Scoreboard.tsx';
 import { RoundResults } from './RoundResults.tsx';
+import { useCountdown } from '../hooks/useCountdown.ts';
+
+const leaveGameFn = httpsCallable(functions, 'leaveGame');
+const joinGameFn = httpsCallable(functions, 'joinGame');
 
 function cardKey(c: Card): string {
   return `${c.rank}-${c.suit}`;
@@ -14,15 +18,25 @@ function cardKey(c: Card): string {
 interface GamePageProps {
   gameState: GameState;
   hand: Card[];
-  scores: ScoreEntry[];
   uid: string;
 }
 
-export function GamePage({ gameState, hand, scores, uid }: GamePageProps) {
+export function GamePage({ gameState, hand, uid }: GamePageProps) {
   const [showResults, setShowResults] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [placements, setPlacements] = useState<Placement[]>([]);
   const [discardIndex, setDiscardIndex] = useState<number | null>(null);
+  const [leaving, setLeaving] = useState(false);
+  const [rejoining, setRejoining] = useState(false);
+
+  const countdown = useCountdown(gameState.phaseDeadline);
+  const showTimer = (
+    gameState.phase === GamePhase.InitialDeal ||
+    gameState.phase === GamePhase.Street2 ||
+    gameState.phase === GamePhase.Street3 ||
+    gameState.phase === GamePhase.Street4 ||
+    gameState.phase === GamePhase.Street5
+  );
 
   const isComplete = gameState.phase === GamePhase.Complete || gameState.phase === GamePhase.Scoring;
 
@@ -62,39 +76,84 @@ export function GamePage({ gameState, hand, scores, uid }: GamePageProps) {
     setShowResults(false);
   }, []);
 
-  const phaseLabel: Record<string, string> = {
-    [GamePhase.InitialDeal]: 'Initial Deal - Place 5 Cards',
-    [GamePhase.Street2]: 'Street 2',
-    [GamePhase.Street3]: 'Street 3',
-    [GamePhase.Street4]: 'Street 4',
-    [GamePhase.Street5]: 'Street 5',
-    [GamePhase.Scoring]: 'Scoring...',
-    [GamePhase.Complete]: 'Round Complete',
-  };
+  const handleLeave = useCallback(async () => {
+    setLeaving(true);
+    try {
+      await leaveGameFn();
+    } catch (err) {
+      console.error('Failed to leave:', err);
+      setLeaving(false);
+    }
+  }, []);
+
+  const handleRejoin = useCallback(async () => {
+    setRejoining(true);
+    try {
+      await joinGameFn({ displayName: gameState.players[uid]?.displayName });
+    } catch (err) {
+      console.error('Failed to rejoin:', err);
+      setRejoining(false);
+    }
+  }, [gameState.players, uid]);
+
+  const isSittingOut = gameState.players[uid]?.sittingOut === true;
+  const isObserver = !gameState.playerOrder.includes(uid);
 
   return (
-    <div className="min-h-screen bg-green-900 flex flex-col">
-      {/* Header */}
-      <div className="bg-gray-900/60 border-b border-gray-700 px-4 py-2 flex items-center justify-between">
-        <h1 className="text-lg font-bold text-white">Pineapple Poker</h1>
-        <span className="text-sm text-green-400 font-medium">
-          {phaseLabel[gameState.phase] ?? gameState.phase}
-        </span>
+    <div className="min-h-screen bg-gray-900 text-white font-mono flex flex-col">
+      {/* Header bar */}
+      <div className="border-b border-gray-700 px-3 py-2 flex items-center justify-between text-xs">
+        <span className="font-bold">Pineapple Poker</span>
+        <div className="flex items-center gap-3">
+          {showTimer && (
+            <span className={countdown < 10 ? 'text-red-400' : 'text-yellow-400'}>
+              {countdown}s
+            </span>
+          )}
+          <span data-testid="phase-label" className="text-green-400">
+            {gameState.phase} | street {gameState.street}
+          </span>
+          <span className="text-gray-500">
+            {gameState.playerOrder.length} playing, {Object.keys(gameState.players).length} total
+          </span>
+          <button
+            onClick={handleLeave}
+            disabled={leaving}
+            className="px-2 py-1 bg-red-800 hover:bg-red-700 disabled:bg-gray-700 text-white text-xs"
+          >
+            {leaving ? '...' : 'Leave'}
+          </button>
+        </div>
       </div>
 
-      {/* Main area */}
-      <div className="flex-1 flex">
-        <div className="flex-1 p-4 overflow-auto">
-          <PlayerGrid
-            gameState={gameState}
-            currentUid={uid}
-            onSlotClick={selectedIndex !== null ? handleSlotClick : undefined}
-          />
+      {/* Sitting-out banner */}
+      {isSittingOut && (
+        <div className="bg-amber-900 border-b border-amber-700 px-3 py-2 text-center text-xs text-amber-300 flex items-center justify-center gap-3">
+          <span>You timed out and are sitting out.</span>
+          <button
+            onClick={handleRejoin}
+            disabled={rejoining}
+            className="px-3 py-1 bg-amber-700 hover:bg-amber-600 disabled:bg-gray-700 text-white text-xs font-bold"
+          >
+            {rejoining ? '...' : 'Rejoin'}
+          </button>
         </div>
+      )}
 
-        <div className="w-56 p-3 border-l border-gray-700/50 hidden lg:block">
-          <Scoreboard scores={scores} currentUid={uid} />
+      {/* Observer banner (not sitting out) */}
+      {isObserver && !isSittingOut && (
+        <div className="bg-blue-900 border-b border-blue-700 px-3 py-1 text-center text-xs text-blue-300">
+          Observing — you'll join the next round
         </div>
+      )}
+
+      {/* Main area */}
+      <div className="flex-1 p-3 overflow-auto">
+        <PlayerGrid
+          gameState={gameState}
+          currentUid={uid}
+          onSlotClick={selectedIndex !== null ? handleSlotClick : undefined}
+        />
       </div>
 
       {/* Hand panel */}
@@ -115,7 +174,6 @@ export function GamePage({ gameState, hand, scores, uid }: GamePageProps) {
         <RoundResults
           gameState={gameState}
           currentUid={uid}
-          scores={scores}
           onClose={handleCloseResults}
         />
       )}

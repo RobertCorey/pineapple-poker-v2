@@ -12,10 +12,10 @@ export function PlayerGrid({ gameState, currentUid, onSlotClick }: PlayerGridPro
   const currentPlayer = gameState.players[currentUid];
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       {/* Other players' boards */}
       {otherPlayers.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
           {otherPlayers.map((uid) => {
             const player = gameState.players[uid];
             if (!player) return null;
@@ -24,6 +24,7 @@ export function PlayerGrid({ gameState, currentUid, onSlotClick }: PlayerGridPro
                 key={uid}
                 board={player.board}
                 playerName={player.displayName}
+                fouled={player.fouled}
                 small
               />
             );
@@ -33,10 +34,11 @@ export function PlayerGrid({ gameState, currentUid, onSlotClick }: PlayerGridPro
 
       {/* Current player's board */}
       {currentPlayer && (
-        <div className="flex justify-center">
+        <div data-testid="my-board" className="flex justify-center">
           <PlayerBoard
             board={currentPlayer.board}
             playerName={`${currentPlayer.displayName} (You)`}
+            fouled={currentPlayer.fouled}
             isCurrentPlayer
             onSlotClick={onSlotClick}
           />
