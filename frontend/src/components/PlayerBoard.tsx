@@ -3,19 +3,12 @@ import { CardComponent } from './CardComponent.tsx';
 
 interface SlotProps {
   card: Card | null;
-  row: Row;
-  index: number;
-  onSlotClick?: (row: Row, index: number) => void;
   small?: boolean;
 }
 
-function CardSlot({ card, row, index, onSlotClick, small }: SlotProps) {
+function CardSlot({ card, small }: SlotProps) {
   return (
-    <div
-      data-testid={`slot-${row}-${index}`}
-      onClick={onSlotClick && !card ? () => onSlotClick(row, index) : undefined}
-      className={!card && onSlotClick ? 'cursor-pointer' : ''}
-    >
+    <div>
       {card ? (
         <CardComponent card={card} small={small} />
       ) : (
@@ -24,7 +17,7 @@ function CardSlot({ card, row, index, onSlotClick, small }: SlotProps) {
             ${small ? 'w-10 h-14' : 'w-14 h-20'}
             rounded-lg border-2 border-dashed
             flex items-center justify-center
-            ${onSlotClick ? 'border-yellow-500/60 bg-yellow-900/20 hover:bg-yellow-900/40' : 'border-gray-600 bg-gray-800/30'}
+            border-gray-600 bg-gray-800/30
           `}
         />
       )}
@@ -43,14 +36,22 @@ interface PlayerBoardProps {
   playerName: string;
   fouled?: boolean;
   isCurrentPlayer?: boolean;
-  onSlotClick?: (row: Row, index: number) => void;
+  onRowClick?: (row: Row) => void;
+  hasCardSelected?: boolean;
   small?: boolean;
 }
 
-export function PlayerBoard({ board, playerName, fouled, isCurrentPlayer, onSlotClick, small }: PlayerBoardProps) {
+export function PlayerBoard({ board, playerName, fouled, isCurrentPlayer, onRowClick, hasCardSelected, small }: PlayerBoardProps) {
   const topSlots = padRow(board.top, 3);
   const middleSlots = padRow(board.middle, 5);
   const bottomSlots = padRow(board.bottom, 5);
+
+  const topHasSpace = board.top.length < 3;
+  const middleHasSpace = board.middle.length < 5;
+  const bottomHasSpace = board.bottom.length < 5;
+
+  const rowClickable = (hasSpace: boolean) =>
+    isCurrentPlayer && hasCardSelected && onRowClick && hasSpace;
 
   return (
     <div className={`
@@ -65,15 +66,19 @@ export function PlayerBoard({ board, playerName, fouled, isCurrentPlayer, onSlot
       </div>
 
       {/* Top row - 3 cards, centered */}
-      <div className="flex justify-center gap-1 mb-1">
+      <div
+        data-testid="row-top"
+        onClick={rowClickable(topHasSpace) ? () => onRowClick!('top' as Row) : undefined}
+        className={`
+          flex justify-center gap-1 mb-1 rounded px-1 py-0.5 transition-colors
+          ${rowClickable(topHasSpace) ? 'cursor-pointer bg-yellow-900/20 hover:bg-yellow-900/40 ring-1 ring-yellow-500/40' : ''}
+        `}
+      >
         <div className={small ? 'w-10' : 'w-14'} />
         {topSlots.map((card, i) => (
           <CardSlot
             key={`top-${i}`}
             card={card}
-            row={'top' as Row}
-            index={i}
-            onSlotClick={isCurrentPlayer ? onSlotClick : undefined}
             small={small}
           />
         ))}
@@ -81,28 +86,36 @@ export function PlayerBoard({ board, playerName, fouled, isCurrentPlayer, onSlot
       </div>
 
       {/* Middle row - 5 cards */}
-      <div className="flex justify-center gap-1 mb-1">
+      <div
+        data-testid="row-middle"
+        onClick={rowClickable(middleHasSpace) ? () => onRowClick!('middle' as Row) : undefined}
+        className={`
+          flex justify-center gap-1 mb-1 rounded px-1 py-0.5 transition-colors
+          ${rowClickable(middleHasSpace) ? 'cursor-pointer bg-yellow-900/20 hover:bg-yellow-900/40 ring-1 ring-yellow-500/40' : ''}
+        `}
+      >
         {middleSlots.map((card, i) => (
           <CardSlot
             key={`mid-${i}`}
             card={card}
-            row={'middle' as Row}
-            index={i}
-            onSlotClick={isCurrentPlayer ? onSlotClick : undefined}
             small={small}
           />
         ))}
       </div>
 
       {/* Bottom row - 5 cards */}
-      <div className="flex justify-center gap-1">
+      <div
+        data-testid="row-bottom"
+        onClick={rowClickable(bottomHasSpace) ? () => onRowClick!('bottom' as Row) : undefined}
+        className={`
+          flex justify-center gap-1 rounded px-1 py-0.5 transition-colors
+          ${rowClickable(bottomHasSpace) ? 'cursor-pointer bg-yellow-900/20 hover:bg-yellow-900/40 ring-1 ring-yellow-500/40' : ''}
+        `}
+      >
         {bottomSlots.map((card, i) => (
           <CardSlot
             key={`bot-${i}`}
             card={card}
-            row={'bottom' as Row}
-            index={i}
-            onSlotClick={isCurrentPlayer ? onSlotClick : undefined}
             small={small}
           />
         ))}
