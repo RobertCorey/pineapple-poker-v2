@@ -1,0 +1,139 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Build & Dev Commands
+
+```bash
+# Three-terminal dev workflow:
+# Terminal 1: firebase emulators:start
+# Terminal 2: npm run dev
+# Terminal 3: npm run dealer
+
+# Frontend
+npm run dev          # Vite dev server (connects to emulators in DEV mode)
+npm run build        # tsc -b && vite build → outputs to dist/
+npm run lint         # ESLint
+
+# Cloud Functions
+cd functions && npm run build        # Compile TS → functions/lib/
+cd functions && npm run build:watch  # Watch mode
+
+# Dealer (game advancement service)
+npm run dealer:build                 # Compile TS → dealer/lib/
+npm run dealer                       # Run dealer process (connects to Firestore emulator)
+
+# Firebase Emulators
+firebase emulators:start             # auth=9099, functions=5001, firestore=8080, hosting=5000, UI=4000
+```
+
+## Testing
+
+E2E tests use Playwright and require the Firebase emulators to be running.
+
+```bash
+# Terminal 1:
+firebase emulators:start
+
+# Terminal 2:
+npm run dealer
+
+# Terminal 3:
+npm test
+```
+
+Tests are located in `e2e/`. They automatically clear emulator data between runs.
+
+## Architecture
+
+**Open Face Chinese Pineapple Poker** — multiplayer human game using Firebase.
+
+### Stack
+- **Frontend**: React 19 + TypeScript + Vite + Tailwind CSS
+- **Backend**: Firebase Cloud Functions (Node.js/TypeScript)
+- **Database**: Firestore (real-time listeners)
+- **Auth**: Firebase Anonymous Auth
+- **Project**: `pineapple-poker-8f3` — emulator-only for now
+
+### Four codebases share one repo
+
+| Directory | Purpose | Module system |
+|-----------|---------|---------------|
+| `src/` | React frontend | ESM (Vite) |
+| `functions/src/` | Cloud Functions backend (write-only endpoints) | CommonJS |
+| `dealer/src/` | Dealer service (game advancement, timeouts) | CommonJS |
+| `shared/` | Game logic used by all three | Compiled into each |
+
+The `shared/` directory is imported by all three: Vite uses an `@shared` alias (vite.config.ts), functions and dealer use TypeScript `paths` + `rootDirs`. When editing shared code, all three must be rebuilt.
+
+### Firestore data model
+
+Single game at `games/current` with subcollections:
+- `games/current` — public GameState (phase, players, boards, street, roundResults)
+- `games/current/hands/{uid}` — private hand (only readable by owning player)
+- `games/current/decks/{uid}` — server-only remaining deck (no client access)
+
+### Game flow
+
+**Cloud Functions** (write-only endpoints in `functions/src/`):
+1. **joinGame** — creates game or adds player
+2. **leaveGame** — removes player entirely
+3. **placeCards** — validates & applies card placements
+
+**Dealer service** (`dealer/src/`) — sole authority for all game state transitions:
+- Listens to `games/current` via `onSnapshot`
+- Starts rounds when >=2 players in Waiting
+- Advances streets when all players have placed
+- Handles timeouts with precise `setTimeout` (auto-fouls at exact deadline)
+- Scores rounds and resets for next round
+- Recovers from any state on restart (stateless — all state from Firestore)
+
+Game engine in `dealer/src/game-engine.ts`:
+- `maybeStartRound()` — shuffle decks, deal initial 5 (requires >=2 players)
+- `advanceStreet()` — deal 3 cards per non-fouled player, advance phase
+- `scoreRound()` — evaluate hands, pairwise scoring, fouls
+- `resetForNextRound()` — promote observers, reset state
+- `handlePhaseTimeout()` — auto-foul players who haven't placed
+- `checkAndAdvance()` — check all placed and advance (recursive for all-fouled cases)
+
+Phases: `waiting` → `initial_deal` → `street_2` → `street_3` → `street_4` → `street_5` → `scoring` → `complete`
+
+### Timeout = Auto-Foul
+
+When phaseDeadline passes, timed-out players get `fouled: true`, hand cleared, board cleared, game advances. Score: -6 per opponent.
+
+### Scoring (simplified)
+
+- +1/-1 per row won/lost
+- +3 scoop bonus (sweep all 3 rows)
+- -6 foul penalty per opponent (timeout or bad row ordering)
+- No royalties
+
+### Observer mode
+
+Players who join mid-round become observers (added to `players` but NOT `playerOrder`). They watch the current round and are promoted to active players when the next round starts.
+
+### Frontend patterns
+
+- State comes from real-time Firestore listeners via hooks (`useGameState`, `usePlayerHand`, `useAuth`)
+- No global state management — hooks + component state only
+- `App.tsx` routes between `Lobby` (not joined) and `GamePage` (in game)
+- Card placement UI state (selections, placements, discards) lives in `GamePage` component state
+- Cloud Functions called via `httpsCallable` from firebase/functions SDK
+- Dev-mode minimal UI: monospace font, minimal styling, raw phase/street display
+
+### Emulators
+
+Emulator connections activate only when `import.meta.env.DEV` is true (in `src/firebase.ts`). Ports: auth=9099, functions=5001, firestore=8080, hosting=5000, UI=4000.
+
+## Critical: Firestore transaction ordering
+
+Firestore transactions require ALL reads before ANY writes. The functions in `dealer/src/game-engine.ts` (`advanceStreet`, `scoreRound`) collect all subcollection reads into a Map first, then perform all writes. Interleaving reads and writes will cause runtime errors.
+
+## Game rules reference
+
+- **Board**: 3 rows — top (3 cards), middle (5 cards), bottom (5 cards)
+- **Initial deal**: 5 cards, place all 5
+- **Streets 2–5**: deal 3 cards, place 2, discard 1
+- **Foul**: rows not in ascending strength (bottom ≥ middle > top) — penalty of 6 points per opponent
+- **Scoring**: pairwise row comparisons + scoop bonus (3 pts for winning all 3 rows)
