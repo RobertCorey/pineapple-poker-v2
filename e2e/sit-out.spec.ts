@@ -12,70 +12,58 @@ test.beforeEach(async () => {
  * as sitting out. They see a "Rejoin" banner and must click it to play again.
  */
 
-/** Place cards for initial deal: 2 bottom, 2 middle, 1 top */
+/** Place cards for initial deal: 2 bottom, 2 middle, 1 top. Auto-submits. */
 async function placeInitialDeal(page: Page) {
   const board = page.getByTestId('my-board');
 
   await page.getByTestId('hand-card-0').waitFor({ timeout: 15_000 });
 
   await page.getByTestId('hand-card-0').click();
-  await board.getByTestId('slot-bottom-0').click();
+  await board.getByTestId('row-bottom').click();
 
   await page.getByTestId('hand-card-0').click();
-  await board.getByTestId('slot-bottom-1').click();
+  await board.getByTestId('row-bottom').click();
 
   await page.getByTestId('hand-card-0').click();
-  await board.getByTestId('slot-middle-0').click();
+  await board.getByTestId('row-middle').click();
 
   await page.getByTestId('hand-card-0').click();
-  await board.getByTestId('slot-middle-1').click();
+  await board.getByTestId('row-middle').click();
 
   await page.getByTestId('hand-card-0').click();
-  await board.getByTestId('slot-top-0').click();
-
-  await page.getByTestId('confirm-button').click();
+  await board.getByTestId('row-top').click();
 }
 
-/** Place cards for streets 2-5 */
+/** Place cards for streets 2-5. Auto-submits. */
 async function placeStreet(page: Page, street: number) {
   const board = page.getByTestId('my-board');
 
   await page.getByTestId('hand-card-0').waitFor({ timeout: 15_000 });
 
   let row1: string, row2: string;
-  let slotIndex1: number, slotIndex2: number;
 
   switch (street) {
     case 2:
-      row1 = 'bottom'; slotIndex1 = 2;
-      row2 = 'middle'; slotIndex2 = 2;
+      row1 = 'bottom'; row2 = 'middle';
       break;
     case 3:
-      row1 = 'bottom'; slotIndex1 = 3;
-      row2 = 'middle'; slotIndex2 = 3;
+      row1 = 'bottom'; row2 = 'middle';
       break;
     case 4:
-      row1 = 'bottom'; slotIndex1 = 4;
-      row2 = 'top'; slotIndex2 = 1;
+      row1 = 'bottom'; row2 = 'top';
       break;
     case 5:
-      row1 = 'middle'; slotIndex1 = 4;
-      row2 = 'top'; slotIndex2 = 2;
+      row1 = 'middle'; row2 = 'top';
       break;
     default:
       throw new Error(`Unexpected street ${street}`);
   }
 
   await page.getByTestId('hand-card-0').click();
-  await board.getByTestId(`slot-${row1}-${slotIndex1}`).click();
+  await board.getByTestId(`row-${row1}`).click();
 
   await page.getByTestId('hand-card-0').click();
-  await board.getByTestId(`slot-${row2}-${slotIndex2}`).click();
-
-  // Discard remaining card
-  await page.getByTestId('hand-card-0').click();
-
-  await page.getByTestId('confirm-button').click();
+  await board.getByTestId(`row-${row2}`).click();
 }
 
 test('timed-out player is sat out and can rejoin', async ({ browser }) => {

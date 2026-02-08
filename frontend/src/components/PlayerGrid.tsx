@@ -1,13 +1,15 @@
-import type { GameState, Row } from '@shared/core/types';
+import type { GameState, Board, Row } from '@shared/core/types';
 import { PlayerBoard } from './PlayerBoard.tsx';
 
 interface PlayerGridProps {
   gameState: GameState;
   currentUid: string;
-  onSlotClick?: (row: Row, index: number) => void;
+  currentPlayerBoard?: Board;
+  onRowClick?: (row: Row) => void;
+  hasCardSelected?: boolean;
 }
 
-export function PlayerGrid({ gameState, currentUid, onSlotClick }: PlayerGridProps) {
+export function PlayerGrid({ gameState, currentUid, currentPlayerBoard, onRowClick, hasCardSelected }: PlayerGridProps) {
   const otherPlayers = gameState.playerOrder.filter((uid) => uid !== currentUid);
   const currentPlayer = gameState.players[currentUid];
 
@@ -36,11 +38,12 @@ export function PlayerGrid({ gameState, currentUid, onSlotClick }: PlayerGridPro
       {currentPlayer && (
         <div data-testid="my-board" className="flex justify-center">
           <PlayerBoard
-            board={currentPlayer.board}
+            board={currentPlayerBoard || currentPlayer.board}
             playerName={`${currentPlayer.displayName} (You)`}
             fouled={currentPlayer.fouled}
             isCurrentPlayer
-            onSlotClick={onSlotClick}
+            onRowClick={onRowClick}
+            hasCardSelected={hasCardSelected}
           />
         </div>
       )}

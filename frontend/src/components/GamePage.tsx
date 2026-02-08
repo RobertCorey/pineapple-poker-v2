@@ -1,18 +1,24 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { httpsCallable } from 'firebase/functions';
-import type { GameState, Card, Row } from '@shared/core/types';
+import type { GameState, Card, Row, Board } from '@shared/core/types';
 import { GamePhase } from '@shared/core/types';
 import { functions } from '../firebase.ts';
 import { PlayerGrid } from './PlayerGrid.tsx';
-import { HandPanel, type Placement } from './HandPanel.tsx';
+import { HandPanel } from './HandPanel.tsx';
 import { RoundResults } from './RoundResults.tsx';
 import { useCountdown } from '../hooks/useCountdown.ts';
 
 const leaveGameFn = httpsCallable(functions, 'leaveGame');
 const joinGameFn = httpsCallable(functions, 'joinGame');
+const placeCardsFn = httpsCallable(functions, 'placeCards');
 
 function cardKey(c: Card): string {
   return `${c.rank}-${c.suit}`;
+}
+
+export interface Placement {
+  card: Card;
+  row: Row;
 }
 
 interface GamePageProps {
@@ -25,7 +31,7 @@ export function GamePage({ gameState, hand, uid }: GamePageProps) {
   const [showResults, setShowResults] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [placements, setPlacements] = useState<Placement[]>([]);
-  const [discardIndex, setDiscardIndex] = useState<number | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [rejoining, setRejoining] = useState(false);
 
@@ -40,6 +46,11 @@ export function GamePage({ gameState, hand, uid }: GamePageProps) {
 
   const isComplete = gameState.phase === GamePhase.Complete || gameState.phase === GamePhase.Scoring;
 
+  const isInitialDeal = gameState.phase === GamePhase.InitialDeal;
+  const isStreet = !isInitialDeal && gameState.phase !== GamePhase.Waiting &&
+    gameState.phase !== GamePhase.Scoring && gameState.phase !== GamePhase.Complete;
+  const requiredPlacements = isInitialDeal ? 5 : 2;
+
   // Auto-show results when game completes
   useEffect(() => {
     if (isComplete) {
@@ -51,26 +62,65 @@ export function GamePage({ gameState, hand, uid }: GamePageProps) {
   useEffect(() => {
     setPlacements([]);
     setSelectedIndex(null);
-    setDiscardIndex(null);
+    setSubmitting(false);
   }, [hand.length, gameState.phase]);
 
   const placedCardKeys = new Set(placements.map((p) => cardKey(p.card)));
   const remainingHand = hand.filter((c) => !placedCardKeys.has(cardKey(c)));
 
-  const handleSlotClick = useCallback((row: Row, index: number) => {
-    if (selectedIndex === null) return;
+  // Compute merged board: Firestore board + local placements
+  const mergedBoard = useMemo((): Board => {
+    const player = gameState.players[uid];
+    if (!player) return { top: [], middle: [], bottom: [] };
+    const board: Board = {
+      top: [...player.board.top],
+      middle: [...player.board.middle],
+      bottom: [...player.board.bottom],
+    };
+    for (const p of placements) {
+      board[p.row] = [...board[p.row], p.card];
+    }
+    return board;
+  }, [gameState.players, uid, placements]);
+
+  const handleRowClick = useCallback(async (row: Row) => {
+    if (selectedIndex === null || submitting) return;
     const card = remainingHand[selectedIndex];
     if (!card) return;
 
-    setPlacements((prev) => [...prev, { card, row, index }]);
-    setSelectedIndex(null);
-  }, [selectedIndex, remainingHand]);
+    // Check row capacity
+    const currentRowSize = mergedBoard[row].length;
+    const maxSize = row === 'top' ? 3 : 5;
+    if (currentRowSize >= maxSize) return;
 
-  const handleUndo = useCallback(() => {
-    setDiscardIndex(null);
-    setPlacements((prev) => prev.slice(0, -1));
+    const newPlacements = [...placements, { card, row }];
+    setPlacements(newPlacements);
     setSelectedIndex(null);
-  }, []);
+
+    // Auto-submit when all required placements are made
+    if (newPlacements.length === requiredPlacements) {
+      setSubmitting(true);
+      try {
+        const placementData = newPlacements.map((p) => ({
+          card: p.card,
+          row: p.row,
+        }));
+
+        // For streets 2-5, find the remaining card to discard
+        const newPlacedKeys = new Set(newPlacements.map((p) => cardKey(p.card)));
+        const discard = isStreet
+          ? hand.find((c) => !newPlacedKeys.has(cardKey(c))) ?? null
+          : null;
+
+        await placeCardsFn({ placements: placementData, discard });
+      } catch (err) {
+        console.error('Failed to place cards:', err);
+        // On error, reset to let user retry
+        setPlacements([]);
+        setSubmitting(false);
+      }
+    }
+  }, [selectedIndex, remainingHand, mergedBoard, placements, submitting, requiredPlacements, isStreet, hand]);
 
   const handleCloseResults = useCallback(() => {
     setShowResults(false);
@@ -152,7 +202,9 @@ export function GamePage({ gameState, hand, uid }: GamePageProps) {
         <PlayerGrid
           gameState={gameState}
           currentUid={uid}
-          onSlotClick={selectedIndex !== null ? handleSlotClick : undefined}
+          currentPlayerBoard={mergedBoard}
+          onRowClick={selectedIndex !== null && !submitting ? handleRowClick : undefined}
+          hasCardSelected={selectedIndex !== null && !submitting}
         />
       </div>
 
@@ -164,9 +216,7 @@ export function GamePage({ gameState, hand, uid }: GamePageProps) {
         selectedIndex={selectedIndex}
         onSelectCard={setSelectedIndex}
         placements={placements}
-        onUndo={handleUndo}
-        discardIndex={discardIndex}
-        onDiscard={setDiscardIndex}
+        submitting={submitting}
       />
 
       {/* Round results modal */}
