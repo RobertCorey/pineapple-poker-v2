@@ -99,16 +99,15 @@ export interface PlayerState {
   board: Board;
   deck: Card[];          // remaining cards in this player's personal deck
   currentHand: Card[];   // cards currently in hand (to be placed)
-  ready: boolean;
   disconnected: boolean;
-  fantasyland: boolean;
+  fouled: boolean;
+  sittingOut?: boolean;  // set when auto-fouled by timeout; must rejoin manually
   score: number;
 }
 
 export interface RoundResult {
   netScore: number;
   fouled: boolean;
-  royalties: RowRoyalties;
 }
 
 export interface GameState {
@@ -120,29 +119,21 @@ export interface GameState {
   roundResults?: Record<string, RoundResult>;
   createdAt: number;
   updatedAt: number;
+  phaseDeadline: number | null;  // Unix timestamp when phase expires
 }
 
 // ---- Scoring types ----
-
-export interface RowRoyalties {
-  top: number;
-  middle: number;
-  bottom: number;
-  total: number;
-}
 
 export interface PairwiseResult {
   playerA: string;
   playerB: string;
   rowPoints: number;
   scoopBonus: number;
-  royaltyDiff: number;
   total: number;
 }
 
 export interface PlayerScore {
   uid: string;
-  royalties: RowRoyalties;
   fouled: boolean;
   netScore: number;
   pairwise: PairwiseResult[];

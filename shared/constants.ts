@@ -1,63 +1,5 @@
 import { HandRank, Rank, ThreeCardHandRank } from './types';
 
-// ---- Bottom row royalties (5-card hand) ----
-export const BOTTOM_ROYALTIES: Partial<Record<number, number>> = {
-  [HandRank.Straight]: 2,
-  [HandRank.Flush]: 4,
-  [HandRank.FullHouse]: 6,
-  [HandRank.FourOfAKind]: 10,
-  [HandRank.StraightFlush]: 15,
-  [HandRank.RoyalFlush]: 25,
-};
-
-// ---- Middle row royalties (5-card hand, doubled vs bottom) ----
-export const MIDDLE_ROYALTIES: Partial<Record<number, number>> = {
-  [HandRank.ThreeOfAKind]: 2,
-  [HandRank.Straight]: 4,
-  [HandRank.Flush]: 8,
-  [HandRank.FullHouse]: 12,
-  [HandRank.FourOfAKind]: 20,
-  [HandRank.StraightFlush]: 30,
-  [HandRank.RoyalFlush]: 50,
-};
-
-// ---- Top row royalties (3-card hand) ----
-
-/**
- * Top row pair royalties: pair of 66 = 1, 77 = 2, ... AA = 9
- * Only pairs of 6 or higher earn royalties.
- */
-export const TOP_PAIR_ROYALTIES: Partial<Record<number, number>> = {
-  [Rank.Six]: 1,
-  [Rank.Seven]: 2,
-  [Rank.Eight]: 3,
-  [Rank.Nine]: 4,
-  [Rank.Ten]: 5,
-  [Rank.Jack]: 6,
-  [Rank.Queen]: 7,
-  [Rank.King]: 8,
-  [Rank.Ace]: 9,
-};
-
-/**
- * Top row trips royalties: 222 = 10, 333 = 11, ... AAA = 22
- */
-export const TOP_TRIPS_ROYALTIES: Record<number, number> = {
-  [Rank.Two]: 10,
-  [Rank.Three]: 11,
-  [Rank.Four]: 12,
-  [Rank.Five]: 13,
-  [Rank.Six]: 14,
-  [Rank.Seven]: 15,
-  [Rank.Eight]: 16,
-  [Rank.Nine]: 17,
-  [Rank.Ten]: 18,
-  [Rank.Jack]: 19,
-  [Rank.Queen]: 20,
-  [Rank.King]: 21,
-  [Rank.Ace]: 22,
-};
-
 /** Points deducted per opponent when fouled. */
 export const FOUL_PENALTY = 6;
 
@@ -75,6 +17,13 @@ export const STREET_PLACE_COUNT = 2;
 
 /** Total streets in a game. */
 export const TOTAL_STREETS = 5;
+
+/** Turn timeout durations in milliseconds */
+export const INITIAL_DEAL_TIMEOUT_MS = 30_000;  // 30 seconds
+export const STREET_TIMEOUT_MS = 20_000;         // 20 seconds
+
+/** Delay between rounds before auto-starting next */
+export const INTER_ROUND_DELAY_MS = 5_000;       // 5 seconds
 
 /** Top row size. */
 export const TOP_ROW_SIZE = 3;
