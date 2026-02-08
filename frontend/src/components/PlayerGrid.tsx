@@ -1,4 +1,4 @@
-import type { GameState, Row } from '../../shared/core/types';
+import type { GameState, Row } from '@shared/core/types';
 import { PlayerBoard } from './PlayerBoard.tsx';
 
 interface PlayerGridProps {

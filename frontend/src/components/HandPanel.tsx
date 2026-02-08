@@ -1,8 +1,8 @@
 import { useCallback } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../firebase.ts';
-import type { Card, Row, GameState } from '../../shared/core/types';
-import { GamePhase } from '../../shared/core/types';
+import type { Card, Row, GameState } from '@shared/core/types';
+import { GamePhase } from '@shared/core/types';
 import { CardComponent } from './CardComponent.tsx';
 
 export interface Placement {

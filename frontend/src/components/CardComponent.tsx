@@ -1,5 +1,5 @@
-import type { Card } from '../../shared/core/types';
-import { RANK_NAMES } from '../../shared/core/constants';
+import type { Card } from '@shared/core/types';
+import { RANK_NAMES } from '@shared/core/constants';
 
 const SUIT_SYMBOLS: Record<string, string> = {
   h: '\u2665',

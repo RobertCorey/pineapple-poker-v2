@@ -1,4 +1,4 @@
-import type { GameState } from '../../shared/core/types';
+import type { GameState } from '@shared/core/types';
 
 interface RoundResultsProps {
   gameState: GameState;

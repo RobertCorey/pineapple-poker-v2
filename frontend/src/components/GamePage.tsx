@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { httpsCallable } from 'firebase/functions';
-import type { GameState, Card, Row } from '../../shared/core/types';
-import { GamePhase } from '../../shared/core/types';
+import type { GameState, Card, Row } from '@shared/core/types';
+import { GamePhase } from '@shared/core/types';
 import { functions } from '../firebase.ts';
 import { PlayerGrid } from './PlayerGrid.tsx';
 import { HandPanel, type Placement } from './HandPanel.tsx';

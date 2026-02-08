@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase.ts';
-import type { GameState } from '../../shared/core/types';
+import type { GameState } from '@shared/core/types';
 
 export function useGameState() {
   const [gameState, setGameState] = useState<GameState | null>(null);

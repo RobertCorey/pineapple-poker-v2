@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase.ts';
-import type { Card } from '../../shared/core/types';
+import type { Card } from '@shared/core/types';
 
 interface HandDoc {
   cards: Card[];

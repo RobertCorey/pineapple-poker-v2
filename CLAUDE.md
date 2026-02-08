@@ -10,21 +10,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Terminal 2: npm run dev
 # Terminal 3: npm run dealer
 
-# Frontend
+# Frontend (workspace: frontend/)
 npm run dev          # Vite dev server (connects to emulators in DEV mode)
-npm run build        # tsc -b && vite build → outputs to dist/
+npm run build        # tsc -b && vite build → outputs to frontend/dist/
 npm run lint         # ESLint
 
-# Cloud Functions
-cd functions && npm run build        # Compile TS → functions/lib/
-cd functions && npm run build:watch  # Watch mode
+# Cloud Functions (workspace: functions/)
+npm run build -w functions        # Compile TS → functions/lib/
+npm run build:watch -w functions  # Watch mode (or: npm run functions:watch)
 
-# Dealer (game advancement service)
-npm run dealer:build                 # Compile TS → dealer/lib/
-npm run dealer                       # Run dealer process (connects to Firestore emulator)
+# Dealer (workspace: dealer/)
+npm run dealer:build              # Compile TS → dealer/lib/
+npm run dealer                    # Run dealer process (connects to Firestore emulator)
 
 # Firebase Emulators
-firebase emulators:start             # auth=9099, functions=5001, firestore=8080, hosting=5000, UI=4000
+firebase emulators:start          # auth=9099, functions=5001, firestore=8080, hosting=5000, UI=4000
+
+# Install all workspaces
+npm install                       # One command installs all workspace deps
 ```
 
 ## Testing
@@ -54,17 +57,34 @@ Tests are located in `e2e/`. They automatically clear emulator data between runs
 - **Database**: Firestore (real-time listeners)
 - **Auth**: Firebase Anonymous Auth
 - **Project**: `pineapple-poker-8f3` — emulator-only for now
+- **Monorepo**: npm workspaces with single lockfile
+
+### npm Workspaces
+
+This repo uses npm workspaces. All dependencies are managed from the root `package.json`:
+
+```
+pineapple-poker (root workspace)
+├── frontend/     → React app (ESM via Vite)
+├── functions/    → Cloud Functions (CommonJS)
+├── dealer/       → Dealer service (CommonJS)
+└── shared/       → Game logic (compiled into each workspace)
+```
+
+- Single `package-lock.json` at root — no sub-lockfiles
+- `npm install` at root installs all workspace deps
+- Run workspace scripts: `npm run <script> -w <workspace>`
 
 ### Four codebases share one repo
 
 | Directory | Purpose | Module system |
 |-----------|---------|---------------|
-| `src/` | React frontend | ESM (Vite) |
+| `frontend/src/` | React frontend | ESM (Vite) |
 | `functions/src/` | Cloud Functions backend (write-only endpoints) | CommonJS |
 | `dealer/src/` | Dealer service (game advancement, timeouts) | CommonJS |
 | `shared/` | Game logic used by all three | Compiled into each |
 
-The `shared/` directory is imported by all three: Vite uses an `@shared` alias (vite.config.ts), functions and dealer use TypeScript `paths` + `rootDirs`. When editing shared code, all three must be rebuilt.
+The `shared/` directory is imported by all three: frontend uses `@shared` alias (vite.config.ts + tsconfig paths), functions and dealer use TypeScript `paths` + `rootDirs`. When editing shared code, all three must be rebuilt.
 
 ### Firestore data model
 
@@ -120,11 +140,12 @@ Players who join mid-round become observers (added to `players` but NOT `playerO
 - `App.tsx` routes between `Lobby` (not joined) and `GamePage` (in game)
 - Card placement UI state (selections, placements, discards) lives in `GamePage` component state
 - Cloud Functions called via `httpsCallable` from firebase/functions SDK
+- Frontend imports shared code via `@shared/` alias (e.g., `import type { Card } from '@shared/core/types'`)
 - Dev-mode minimal UI: monospace font, minimal styling, raw phase/street display
 
 ### Emulators
 
-Emulator connections activate only when `import.meta.env.DEV` is true (in `src/firebase.ts`). Ports: auth=9099, functions=5001, firestore=8080, hosting=5000, UI=4000.
+Emulator connections activate only when `import.meta.env.DEV` is true (in `frontend/src/firebase.ts`). Ports: auth=9099, functions=5001, firestore=8080, hosting=5000, UI=4000.
 
 ## Critical: Firestore transaction ordering
 
