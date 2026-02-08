@@ -7,7 +7,13 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "dealer": "cd dealer && npm run dev",
+    "dealer:build": "cd dealer && npm run build",
+    "functions:watch": "cd functions && npm run build:watch",
+    "dev:up": "./scripts/dev-up.sh",
+    "dev:down": "./scripts/dev-down.sh",
+    "test": "npx playwright test"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.18",
@@ -18,6 +24,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@playwright/test": "^1.58.2",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",

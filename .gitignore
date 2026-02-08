@@ -13,8 +13,9 @@ dist
 dist-ssr
 *.local
 
-# Functions build output
+# Build output
 functions/lib
+dealer/lib
 
 # Editor directories and files
 .vscode/*
