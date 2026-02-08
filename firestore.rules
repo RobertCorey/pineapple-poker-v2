@@ -20,12 +20,6 @@ service cloud.firestore {
       }
     }
 
-    // Scoreboard: public read, server-only write
-    match /scoreboard/{entry} {
-      allow read: if true;
-      allow write: if false; // server-only
-    }
-
     // Deny everything else
     match /{document=**} {
       allow read, write: if false;
