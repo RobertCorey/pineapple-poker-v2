@@ -1,5 +1,5 @@
-import { Rank, Suit } from './types';
-import type { Card } from './types';
+import { Rank, Suit } from '../core/types';
+import type { Card } from '../core/types';
 
 const SUITS: readonly string[] = [Suit.Clubs, Suit.Diamonds, Suit.Hearts, Suit.Spades];
 const RANKS: readonly number[] = [

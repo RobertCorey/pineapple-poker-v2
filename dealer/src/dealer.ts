@@ -1,6 +1,7 @@
 import type { Firestore } from 'firebase-admin/firestore';
-import { GamePhase as GP } from '../../shared/types';
-import { INTER_ROUND_DELAY_MS } from '../../shared/constants';
+import { GamePhase as GP } from '../../shared/core/types';
+import { INTER_ROUND_DELAY_MS } from '../../shared/core/constants';
+import { GAME_DOC } from '../../shared/core/firestore-paths';
 import {
   maybeStartRound,
   scoreRound,
@@ -8,8 +9,6 @@ import {
   handlePhaseTimeout,
   checkAndAdvance,
 } from './game-engine';
-
-const GAME_DOC = 'games/current';
 
 function isPlacementPhase(phase: string): boolean {
   return (

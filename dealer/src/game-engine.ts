@@ -3,40 +3,19 @@ import { FieldValue } from 'firebase-admin/firestore';
 import type {
   Card,
   Board,
-  GamePhase,
-} from '../../shared/types';
-import { GamePhase as GP } from '../../shared/types';
+} from '../../shared/core/types';
+import { GamePhase as GP } from '../../shared/core/types';
 import {
   INITIAL_DEAL_COUNT,
   STREET_DEAL_COUNT,
   TOTAL_STREETS,
   INITIAL_DEAL_TIMEOUT_MS,
   STREET_TIMEOUT_MS,
-} from '../../shared/constants';
-import { createShuffledDeck, dealCards } from '../../shared/deck';
-import { scoreAllPlayers, isFoul } from '../../shared/scoring';
-
-// ---- Firestore paths ----
-const GAME_DOC = 'games/current';
-const handDoc = (uid: string) => `games/current/hands/${uid}`;
-const deckDoc = (uid: string) => `games/current/decks/${uid}`;
-
-// ---- Helper: empty board ----
-function emptyBoard(): Board {
-  return { top: [], middle: [], bottom: [] };
-}
-
-// ---- Helper: next phase for a given street ----
-function phaseForStreet(street: number): GamePhase {
-  switch (street) {
-    case 1: return GP.InitialDeal;
-    case 2: return GP.Street2;
-    case 3: return GP.Street3;
-    case 4: return GP.Street4;
-    case 5: return GP.Street5;
-    default: return GP.Scoring;
-  }
-}
+} from '../../shared/core/constants';
+import { createShuffledDeck, dealCards } from '../../shared/game-logic/deck';
+import { scoreAllPlayers, isFoul } from '../../shared/game-logic/scoring';
+import { GAME_DOC, handDoc, deckDoc } from '../../shared/core/firestore-paths';
+import { emptyBoard, phaseForStreet } from '../../shared/game-logic/board-utils';
 
 // ---- Helper: all active (non-fouled) players have placed their cards ----
 function allActivePlaced(

@@ -1,7 +1,7 @@
 import {
   FOUL_PENALTY,
   SCOOP_BONUS,
-} from './constants';
+} from '../core/constants';
 import {
   compare5CardHands,
   compareRows,
@@ -15,7 +15,7 @@ import {
   type PlayerScore,
   type ScoringResult,
   ThreeCardHandRank,
-} from './types';
+} from '../core/types';
 
 // ---- Foul detection ----
 

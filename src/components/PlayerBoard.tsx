@@ -1,4 +1,4 @@
-import type { Board, Card, Row } from '../../shared/types.ts';
+import type { Board, Card, Row } from '../../shared/core/types';
 import { CardComponent } from './CardComponent.tsx';
 
 interface SlotProps {

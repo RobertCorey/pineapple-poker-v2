@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../firebase.ts';
-import type { GameState } from '../../shared/types.ts';
+import type { GameState } from '../../shared/core/types';
 
 interface LobbyProps {
   uid: string;

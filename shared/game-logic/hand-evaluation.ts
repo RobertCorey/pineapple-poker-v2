@@ -5,7 +5,7 @@ import {
   Rank,
   type ThreeCardHandEvaluation,
   ThreeCardHandRank,
-} from './types';
+} from '../core/types';
 
 // ---- Helpers ----
 

@@ -1,20 +1,17 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
-import type { Card, Board, Row, GamePhase } from '../../shared/types';
-import { GamePhase as GP } from '../../shared/types';
+import type { Card, Board, Row, GamePhase } from '../../shared/core/types';
+import { GamePhase as GP } from '../../shared/core/types';
 import {
   INITIAL_DEAL_COUNT,
   STREET_PLACE_COUNT,
   TOP_ROW_SIZE,
   FIVE_CARD_ROW_SIZE,
-} from '../../shared/constants';
+} from '../../shared/core/constants';
+import { GAME_DOC, handDoc, deckDoc } from '../../shared/core/firestore-paths';
+import { emptyBoard } from '../../shared/game-logic/board-utils';
 
 const db = () => admin.firestore();
-const GAME_DOC = 'games/current';
-
-function emptyBoard(): Board {
-  return { top: [], middle: [], bottom: [] };
-}
 
 // ---- removePlayer (inlined from former game-manager.ts) ----
 
@@ -38,8 +35,8 @@ async function removePlayer(uid: string): Promise<void> {
     const newPlayerOrder = playerOrder.filter((u) => u !== uid);
 
     // Clean up subcollection docs
-    tx.delete(db().doc(`games/current/hands/${uid}`));
-    tx.delete(db().doc(`games/current/decks/${uid}`));
+    tx.delete(db().doc(handDoc(uid)));
+    tx.delete(db().doc(deckDoc(uid)));
 
     // If no players remain, delete the game
     if (Object.keys(players).length === 0) {
@@ -312,7 +309,7 @@ export const placeCards = onCall(async (request) => {
     });
 
     // Clear hand doc
-    tx.set(db().doc(`games/current/hands/${uid}`), { cards: [] });
+    tx.set(db().doc(handDoc(uid)), { cards: [] });
   });
 
   // Dealer will detect the state change via onSnapshot and advance if all have placed
