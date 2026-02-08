@@ -34,3 +34,8 @@ dealer/lib
 # Screenshots and Playwright
 *.png
 .playwright-mcp/
+test-results/
+
+# Personal notes
+notes.txt
+notes/
