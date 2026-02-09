@@ -29,6 +29,10 @@ dealer/lib
 *.sln
 *.sw?
 
+# Environment files
+.env
+.env.*
+
 # Firebase
 .firebase/
 
