@@ -52,15 +52,15 @@ test('placed cards appear on board and auto-submit works', async ({ browser }) =
   await expect(board.getByTestId('row-bottom')).toBeVisible();
 
   // --- Verify: card appears on board after placing ---
-  // Count cards on board before placing (bottom row should have 0 white bg cards)
+  // Count cards on board before placing (bottom row should have 0 filled cards)
   const bottomRow = board.getByTestId('row-bottom');
 
   // Select first card and place on bottom row
   await alice.getByTestId('hand-card-0').click();
   await bottomRow.click();
 
-  // Card should now appear on the board — the bottom row should contain a card element (bg-white)
-  await expect(bottomRow.locator('.bg-white')).toHaveCount(1);
+  // Card should now appear on the board (select-none is on all face-up cards, not empty slots)
+  await expect(bottomRow.locator('.select-none')).toHaveCount(1);
 
   // Card should be removed from hand (hand-card count decreased)
   // We started with 5 cards, now should have 4
