@@ -1,15 +1,14 @@
 import { test, expect, type Page } from '@playwright/test';
 
-const PROJECT_ID = 'pineapple-poker-8f3';
-
-test.beforeEach(async () => {
-  await fetch(`http://localhost:8080/emulator/v1/projects/${PROJECT_ID}/databases/(default)/documents`, { method: 'DELETE' });
-  await fetch(`http://localhost:9099/emulator/v1/projects/${PROJECT_ID}/accounts`, { method: 'DELETE' });
-});
+const CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+function generateRoomCode(): string {
+  return Array.from({ length: 6 }, () => CHARS[Math.floor(Math.random() * CHARS.length)]).join('');
+}
 
 /**
- * Sit-out E2E test: when a player times out, they are auto-fouled and marked
- * as sitting out. They see a "Rejoin" banner and must click it to play again.
+ * Timeout E2E test: when a player times out, they are auto-fouled.
+ * In the next round, they are still active (not sitting out) and can play normally.
+ * Verifies cumulative scoring works across rounds.
  */
 
 /** Place cards for initial deal: 2 bottom, 2 middle, 1 top. Auto-submits. */
@@ -66,9 +65,11 @@ async function placeStreet(page: Page, street: number) {
   await board.getByTestId(`row-${row2}`).click();
 }
 
-test('timed-out player is sat out and can rejoin', async ({ browser }) => {
+test('timed-out player is auto-fouled but active in next round', async ({ browser }) => {
   // Increase timeout — we need to wait for a 30s timeout to expire
   test.setTimeout(180_000);
+
+  const roomId = generateRoomCode();
 
   const ctx1 = await browser.newContext();
   const ctx2 = await browser.newContext();
@@ -76,27 +77,28 @@ test('timed-out player is sat out and can rejoin', async ({ browser }) => {
   const bob = await ctx2.newPage();
 
   // --- Both players join ---
-  await alice.goto('/');
-  await bob.goto('/');
+  await alice.goto(`/?room=${roomId}`);
+  await bob.goto(`/?room=${roomId}`);
 
   await alice.getByTestId('name-input').fill('Alice');
   await alice.getByTestId('join-button').click();
-  await alice.getByTestId('phase-label').waitFor({ timeout: 10_000 });
+  await alice.getByTestId('start-match-button').waitFor({ timeout: 10_000 });
 
   await bob.getByTestId('name-input').fill('Bob');
   await bob.getByTestId('join-button').click();
-  await bob.getByTestId('phase-label').waitFor({ timeout: 10_000 });
+  await expect(bob.getByText('Waiting for host to start')).toBeVisible({ timeout: 10_000 });
 
-  // --- Dealer starts round → initial_deal ---
+  // --- Host starts match ---
+  await alice.getByTestId('start-match-button').click();
+
+  // --- Round 1: Alice places, Bob times out ---
   await expect(alice.getByTestId('phase-label')).toContainText('initial_deal', { timeout: 15_000 });
   await expect(bob.getByTestId('phase-label')).toContainText('initial_deal', { timeout: 15_000 });
 
-  // --- Alice places cards, Bob does NOT (will time out) ---
   await placeInitialDeal(alice);
 
   // Wait for Bob to time out (30s initial deal timeout).
   // After timeout, Bob is fouled but Alice still plays streets 2-5.
-  // Wait for street_2 to appear (means timeout fired and game advanced).
   await expect(alice.getByTestId('phase-label')).toContainText('street_2', { timeout: 45_000 });
 
   // Alice plays through remaining streets solo (Bob is fouled, auto-skipped)
@@ -111,34 +113,37 @@ test('timed-out player is sat out and can rejoin', async ({ browser }) => {
   await alice.getByTestId('round-results').waitFor({ timeout: 15_000 });
   await bob.getByTestId('round-results').waitFor({ timeout: 15_000 });
 
-  // Verify round results show up
-  await expect(alice.getByTestId('round-results')).toContainText('Round Complete');
+  // Verify round results show up with round info
+  await expect(alice.getByTestId('round-results')).toContainText('Round 1 of 3 Complete');
 
   // Close results
   await alice.getByTestId('close-results').click();
   await bob.getByTestId('close-results').click();
 
-  // --- After reset, Bob should be sitting out ---
-  // Bob should see the sitting-out banner with Rejoin button
-  await expect(bob.getByText('sitting out')).toBeVisible({ timeout: 20_000 });
-  await expect(bob.getByRole('button', { name: 'Rejoin' })).toBeVisible();
+  // --- Round 2: Bob should be ACTIVE (not sitting out), both play ---
+  await expect(alice.getByTestId('phase-label')).toContainText('initial_deal', { timeout: 20_000 });
+  await expect(bob.getByTestId('phase-label')).toContainText('initial_deal', { timeout: 20_000 });
 
-  // Game should be in waiting since only Alice is active (need 2 to start)
-  await expect(alice.getByTestId('phase-label')).toContainText('waiting', { timeout: 20_000 });
-
-  // --- Bob clicks Rejoin ---
-  await bob.getByRole('button', { name: 'Rejoin' }).click();
-
-  // Bob's sitting-out banner should disappear
-  await expect(bob.getByText('sitting out')).not.toBeVisible({ timeout: 10_000 });
-
-  // --- With 2 active players again, dealer should start a new round ---
-  await expect(alice.getByTestId('phase-label')).toContainText('initial_deal', { timeout: 15_000 });
-  await expect(bob.getByTestId('phase-label')).toContainText('initial_deal', { timeout: 15_000 });
-
-  // Both should have cards in hand
-  await alice.getByTestId('hand-card-0').waitFor({ timeout: 10_000 });
+  // Bob should have cards — he's active this round
   await bob.getByTestId('hand-card-0').waitFor({ timeout: 10_000 });
+
+  // Both players place
+  await placeInitialDeal(alice);
+  await placeInitialDeal(bob);
+
+  // Advance through streets
+  for (const street of [2, 3, 4, 5]) {
+    await expect(alice.getByTestId('phase-label')).toContainText(`street_${street}`, { timeout: 15_000 });
+    await placeStreet(alice, street);
+    await placeStreet(bob, street);
+  }
+
+  // Round 2 results
+  await alice.getByTestId('round-results').waitFor({ timeout: 15_000 });
+  await expect(alice.getByTestId('round-results')).toContainText('Round 2 of 3 Complete');
+
+  // Verify cumulative scores are displayed (Total column)
+  await expect(alice.getByTestId('round-results')).toContainText('Total');
 
   // Cleanup
   await ctx1.close();

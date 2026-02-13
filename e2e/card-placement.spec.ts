@@ -1,11 +1,9 @@
 import { test, expect } from '@playwright/test';
 
-const PROJECT_ID = 'pineapple-poker-8f3';
-
-test.beforeEach(async () => {
-  await fetch(`http://localhost:8080/emulator/v1/projects/${PROJECT_ID}/databases/(default)/documents`, { method: 'DELETE' });
-  await fetch(`http://localhost:9099/emulator/v1/projects/${PROJECT_ID}/accounts`, { method: 'DELETE' });
-});
+const CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+function generateRoomCode(): string {
+  return Array.from({ length: 6 }, () => CHARS[Math.floor(Math.random() * CHARS.length)]).join('');
+}
 
 /**
  * Card placement UI tests: verifies that cards appear on the board when placed,
@@ -14,22 +12,27 @@ test.beforeEach(async () => {
  */
 
 test('placed cards appear on board and auto-submit works', async ({ browser }) => {
+  const roomId = generateRoomCode();
+
   const ctx1 = await browser.newContext();
   const ctx2 = await browser.newContext();
   const alice = await ctx1.newPage();
   const bob = await ctx2.newPage();
 
   // --- Both players join ---
-  await alice.goto('/');
-  await bob.goto('/');
+  await alice.goto(`/?room=${roomId}`);
+  await bob.goto(`/?room=${roomId}`);
 
   await alice.getByTestId('name-input').fill('Alice');
   await alice.getByTestId('join-button').click();
-  await alice.getByTestId('phase-label').waitFor({ timeout: 10_000 });
+  await alice.getByTestId('start-match-button').waitFor({ timeout: 10_000 });
 
   await bob.getByTestId('name-input').fill('Bob');
   await bob.getByTestId('join-button').click();
-  await bob.getByTestId('phase-label').waitFor({ timeout: 10_000 });
+  await expect(bob.getByText('Waiting for host to start')).toBeVisible({ timeout: 10_000 });
+
+  // Host starts match
+  await alice.getByTestId('start-match-button').click();
 
   // Wait for initial_deal phase
   await expect(alice.getByTestId('phase-label')).toContainText('initial_deal', { timeout: 15_000 });
@@ -90,7 +93,6 @@ test('placed cards appear on board and auto-submit works', async ({ browser }) =
   await expect(alice.getByTestId('confirm-button')).not.toBeVisible();
 
   // --- Bob places to advance game to street 2 ---
-  await expect(bob.getByTestId('phase-label')).toContainText('initial_deal', { timeout: 15_000 });
   await bob.getByTestId('hand-card-0').waitFor({ timeout: 15_000 });
 
   const bobBoard = bob.getByTestId('my-board');
