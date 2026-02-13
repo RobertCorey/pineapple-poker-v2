@@ -73,6 +73,15 @@ npm test                           # Playwright E2E tests
 
 E2E tests are in `e2e/`. Each test generates a unique room code for isolation — no shared state between tests.
 
+7 tests in the main suite (`npm test`):
+- `happy-path.spec.ts` — 2-player full 3-round match, play again
+- `card-placement.spec.ts` — card placement UI, auto-submit, auto-discard
+- `sit-out.spec.ts` — timeout auto-foul, player active next round
+- `leave-game.spec.ts` — player leaves mid-round, game continues for remaining player
+- `observer.spec.ts` — late joiner observes full match, promoted via play-again, 3-player game
+- `scoring.spec.ts` — foul penalty scores (+6/-6), pairwise breakdown, cumulative totals
+- `dev-ui.spec.ts` — debug panel toggle, hand summary, row evaluation labels, pairwise display
+
 ### All dealer tests
 
 ```bash
@@ -169,7 +178,7 @@ When phaseDeadline passes, timed-out players get `fouled: true`, hand cleared, b
 
 ### Observer mode
 
-Players who join mid-round become observers (added to `players` but NOT `playerOrder`). They watch the current round and are promoted to active players when the next round starts.
+Players who join mid-round become observers (added to `players` but NOT `playerOrder`). They watch the current match and are promoted to active players when `playAgain` starts a new match (not between rounds within the same match).
 
 ### Frontend patterns
 
@@ -182,6 +191,9 @@ Players who join mid-round become observers (added to `players` but NOT `playerO
 - Cloud Functions called via `httpsCallable` from firebase/functions SDK — all include `roomId`
 - Frontend imports shared code via `@shared/` alias (e.g., `import type { Card } from '@shared/core/types'`)
 - Dev-mode minimal UI: monospace font, minimal styling, raw phase/street display
+- `DebugPanel` sidebar: toggleable via [DBG] button, shows game state, player statuses, phase info
+- `handDescription.ts` utility: human-readable hand labels (e.g., "Pair (K)", "Flush (A-high)")
+- `PlayerBoard` shows `RowEval` labels on completed rows using hand-evaluation functions
 
 ### Emulators
 
