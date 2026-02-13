@@ -105,12 +105,12 @@ export async function maybeStartRound(db: Firestore): Promise<boolean> {
  * Skip dealing to fouled players.
  * If this was the last street, transition to scoring.
  */
-export async function advanceStreet(db: Firestore): Promise<void> {
+export async function advanceStreet(db: Firestore): Promise<'scoring' | 'advanced' | 'noop'> {
   const gameRef = db.doc(GAME_DOC);
 
-  await db.runTransaction(async (tx) => {
+  return db.runTransaction(async (tx) => {
     const snap = await tx.get(gameRef);
-    if (!snap.exists) return;
+    if (!snap.exists) return 'noop';
 
     const game = snap.data()!;
     const currentStreet = game.street as number;
@@ -119,7 +119,7 @@ export async function advanceStreet(db: Firestore): Promise<void> {
 
     // Verify all active players have placed
     if (!allActivePlaced(players as Record<string, { currentHand: Card[]; fouled: boolean }>, uids)) {
-      return;
+      return 'noop';
     }
 
     if (currentStreet >= TOTAL_STREETS) {
@@ -128,7 +128,7 @@ export async function advanceStreet(db: Firestore): Promise<void> {
         phase: GP.Scoring,
         updatedAt: Date.now(),
       });
-      return;
+      return 'scoring';
     }
 
     // Read ALL deck docs first (Firestore requires all reads before writes)
@@ -181,6 +181,8 @@ export async function advanceStreet(db: Firestore): Promise<void> {
       phaseDeadline,
       updatedAt: Date.now(),
     });
+
+    return 'advanced';
   });
 }
 
@@ -379,32 +381,27 @@ export async function handlePhaseTimeout(db: Firestore): Promise<void> {
 /**
  * Check if all active players have placed and advance the game.
  * Called by the dealer after detecting state changes.
+ *
+ * Delegates to advanceStreet() which handles all logic inside a transaction.
+ * Loops (instead of recursing) to handle the case where all remaining
+ * players are fouled after advancing — each iteration is a new transaction.
  */
 export async function checkAndAdvance(db: Firestore): Promise<void> {
-  const gameRef = db.doc(GAME_DOC);
-  const snap = await gameRef.get();
-  if (!snap.exists) return;
+  const MAX_ITERATIONS = TOTAL_STREETS + 1; // safety bound
 
-  const game = snap.data()!;
-  const players = game.players as Record<string, { currentHand: Card[]; fouled: boolean }>;
-  const playerOrder = game.playerOrder as string[];
+  for (let i = 0; i < MAX_ITERATIONS; i++) {
+    const result = await advanceStreet(db);
 
-  // Active players = non-fouled players in playerOrder
-  const allPlaced = playerOrder.every((uid) => {
-    const p = players[uid];
-    return !p || p.fouled || p.currentHand.length === 0;
-  });
-  if (!allPlaced) return;
+    if (result === 'scoring') {
+      await scoreRound(db);
+      return;
+    }
 
-  const street = game.street as number;
+    if (result === 'noop') {
+      return;
+    }
 
-  if (street >= 5) {
-    // Move to scoring
-    await db.doc(GAME_DOC).update({ phase: GP.Scoring, updatedAt: Date.now() });
-    await scoreRound(db);
-  } else {
-    await advanceStreet(db);
-    // Recursively check in case all remaining players are fouled
-    await checkAndAdvance(db);
+    // result === 'advanced' — loop to check if the next street also needs advancing
+    // (e.g., all remaining players are fouled)
   }
 }

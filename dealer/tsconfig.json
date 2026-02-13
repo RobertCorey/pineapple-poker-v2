@@ -18,5 +18,5 @@
     "baseUrl": "."
   },
   "include": ["src/**/*", "../shared/**/*"],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "../shared/**/*.test.ts", "../shared/vitest.config.ts"]
 }
