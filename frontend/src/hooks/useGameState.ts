@@ -7,14 +7,21 @@ export function useGameState(roomId: string | null) {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  // Reset state immediately when roomId changes (track previous value with state)
+  const [prevRoomId, setPrevRoomId] = useState(roomId);
+  if (prevRoomId !== roomId) {
+    setPrevRoomId(roomId);
     if (!roomId) {
       setGameState(null);
       setLoading(false);
-      return;
+    } else {
+      setLoading(true);
     }
+  }
 
-    setLoading(true);
+  useEffect(() => {
+    if (!roomId) return;
+
     const unsub = onSnapshot(
       doc(db, 'games', roomId),
       (snap) => {

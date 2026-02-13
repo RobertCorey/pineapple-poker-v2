@@ -61,19 +61,23 @@ export function GamePage({ gameState, hand, uid, roomId, onLeaveRoom }: GamePage
     gameState.phase !== GamePhase.MatchComplete;
   const requiredPlacements = isInitialDeal ? 5 : 2;
 
-  // Auto-show results when round completes (not match complete — that has its own modal)
-  useEffect(() => {
+  // Auto-show results when round completes (track previous value with state)
+  const [prevRoundComplete, setPrevRoundComplete] = useState(false);
+  if (isRoundComplete !== prevRoundComplete) {
+    setPrevRoundComplete(isRoundComplete);
     if (isRoundComplete) {
       setShowResults(true);
     }
-  }, [isRoundComplete]);
+  }
 
-  // Reset placement state when hand changes (new street dealt)
-  useEffect(() => {
+  // Reset placement state when phase changes (track previous value with state)
+  const [prevPhase, setPrevPhase] = useState(gameState.phase);
+  if (prevPhase !== gameState.phase) {
+    setPrevPhase(gameState.phase);
     setPlacements([]);
     setSelectedIndex(null);
     setSubmitting(false);
-  }, [gameState.phase]);
+  }
 
   const placedCardKeys = new Set(placements.map((p) => cardKey(p.card)));
   const remainingHand = hand.filter((c) => !placedCardKeys.has(cardKey(c)));
