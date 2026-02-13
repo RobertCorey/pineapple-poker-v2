@@ -9,7 +9,28 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      firebase: ${{ steps.check.outputs.firebase }}
+      dealer: ${{ steps.check.outputs.dealer }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - id: check
+        run: |
+          CHANGED=$(git diff --name-only HEAD~1)
+          FIREBASE=$(echo "$CHANGED" | grep -qE '^(frontend/|functions/|shared/|firestore\.rules|firebase\.json)' && echo true || echo false)
+          DEALER=$(echo "$CHANGED" | grep -qE '^(dealer/|shared/)' && echo true || echo false)
+          echo "firebase=$FIREBASE" >> "$GITHUB_OUTPUT"
+          echo "dealer=$DEALER" >> "$GITHUB_OUTPUT"
+          echo "Deploy firebase: $FIREBASE, Deploy dealer: $DEALER"
+
   deploy-firebase:
+    needs: changes
+    if: needs.changes.outputs.firebase == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -40,6 +61,8 @@ jobs:
         run: rm -f /tmp/sa-key.json
 
   deploy-dealer:
+    needs: changes
+    if: needs.changes.outputs.dealer == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -103,3 +126,25 @@ jobs:
       - name: Clean up SSH key
         if: always()
         run: rm -f ~/.ssh/deploy_key
+
+  smoke-test:
+    needs: [changes, deploy-firebase, deploy-dealer]
+    if: ${{ !failure() && !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E tests against production
+        env:
+          PRODUCTION_URL: https://pineapple-poker-8f3.web.app
+        run: npx playwright test
