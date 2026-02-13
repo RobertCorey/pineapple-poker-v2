@@ -34,6 +34,14 @@ export function GamePage({ gameState, hand, uid }: GamePageProps) {
   const [submitting, setSubmitting] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [rejoining, setRejoining] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+
+  // Auto-dismiss toast after 3 seconds
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 3000);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   const countdown = useCountdown(gameState.phaseDeadline);
   const showTimer = (
@@ -115,7 +123,7 @@ export function GamePage({ gameState, hand, uid }: GamePageProps) {
         await placeCardsFn({ placements: placementData, discard });
       } catch (err) {
         console.error('Failed to place cards:', err);
-        // On error, reset to let user retry
+        setToast('Failed to place cards — try again');
         setPlacements([]);
         setSubmitting(false);
       }
@@ -132,6 +140,7 @@ export function GamePage({ gameState, hand, uid }: GamePageProps) {
       await leaveGameFn();
     } catch (err) {
       console.error('Failed to leave:', err);
+      setToast('Failed to leave game');
       setLeaving(false);
     }
   }, []);
@@ -142,6 +151,7 @@ export function GamePage({ gameState, hand, uid }: GamePageProps) {
       await joinGameFn({ displayName: gameState.players[uid]?.displayName });
     } catch (err) {
       console.error('Failed to rejoin:', err);
+      setToast('Failed to rejoin game');
       setRejoining(false);
     }
   }, [gameState.players, uid]);
@@ -226,6 +236,12 @@ export function GamePage({ gameState, hand, uid }: GamePageProps) {
           currentUid={uid}
           onClose={handleCloseResults}
         />
+      )}
+      {/* Toast */}
+      {toast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 bg-red-900 border border-red-700 px-4 py-2 text-xs text-red-300 shadow-lg z-50">
+          {toast}
+        </div>
       )}
     </div>
   );

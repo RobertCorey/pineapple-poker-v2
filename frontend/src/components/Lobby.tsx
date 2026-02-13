@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../firebase.ts';
 import type { GameState } from '@shared/core/types';
@@ -14,6 +14,13 @@ interface LobbyProps {
 export function Lobby({ uid, displayName, setDisplayName, signIn, gameState }: LobbyProps) {
   const [nameInput, setNameInput] = useState(displayName);
   const [joining, setJoining] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 3000);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   const players = gameState ? Object.values(gameState.players) : [];
 
@@ -27,6 +34,7 @@ export function Lobby({ uid, displayName, setDisplayName, signIn, gameState }: L
       await joinGame({ displayName: nameInput.trim() });
     } catch (err) {
       console.error('Failed to join:', err);
+      setToast('Failed to join game — try again');
     } finally {
       setJoining(false);
     }
@@ -77,6 +85,12 @@ export function Lobby({ uid, displayName, setDisplayName, signIn, gameState }: L
           </div>
         )}
       </div>
+      {/* Toast */}
+      {toast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 bg-red-900 border border-red-700 px-4 py-2 text-xs text-red-300 shadow-lg z-50">
+          {toast}
+        </div>
+      )}
     </div>
   );
 }
