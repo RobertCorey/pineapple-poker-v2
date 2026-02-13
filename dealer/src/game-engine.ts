@@ -11,6 +11,7 @@ import {
   TOTAL_STREETS,
   INITIAL_DEAL_TIMEOUT_MS,
   STREET_TIMEOUT_MS,
+  INTER_ROUND_DELAY_MS,
 } from '../../shared/core/constants';
 import { createShuffledDeck, dealCards } from '../../shared/game-logic/deck';
 import { scoreAllPlayers, isFoul } from '../../shared/game-logic/scoring';
@@ -256,6 +257,7 @@ export async function scoreRound(db: Firestore): Promise<void> {
       phase: GP.Complete,
       roundResults,
       players: updatedPlayers,
+      phaseDeadline: Date.now() + INTER_ROUND_DELAY_MS,
       updatedAt: Date.now(),
     });
   });
@@ -355,6 +357,19 @@ export async function handlePhaseTimeout(db: Firestore): Promise<void> {
     if (!snap.exists) return;
 
     const game = snap.data()!;
+    const phase = game.phase as string;
+    const phaseDeadline = game.phaseDeadline as number | null;
+
+    // Only foul during placement phases when deadline has actually passed
+    if (
+      phase !== GP.InitialDeal &&
+      phase !== GP.Street2 &&
+      phase !== GP.Street3 &&
+      phase !== GP.Street4 &&
+      phase !== GP.Street5
+    ) return;
+    if (phaseDeadline !== null && phaseDeadline > Date.now()) return;
+
     const players = game.players as Record<string, Record<string, unknown>>;
     const playerOrder = game.playerOrder as string[];
 

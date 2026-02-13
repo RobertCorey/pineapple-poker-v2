@@ -32,7 +32,33 @@ npm install                       # One command installs all workspace deps
 
 ## Testing
 
-E2E tests use Playwright and require the Firebase emulators to be running.
+### Unit tests (no emulators needed)
+
+```bash
+npm run test:unit                  # Shared logic + dealer unit tests
+npm run test:dealer:unit           # Dealer unit tests only (dealer/src/dealer.test.ts)
+```
+
+Dealer unit tests (`dealer/src/dealer.test.ts`) use mocked Firestore and vitest fake timers to verify:
+- Timer management: deadline-aware create/reset/clear behavior
+- Phase reactions: correct game-engine function called per phase
+- Timeout callbacks: correct sequencing (e.g. handlePhaseTimeout before checkAndAdvance)
+
+Shared logic tests (`shared/`) use vitest to verify scoring, hand evaluation, and board utils.
+
+### Integration tests (requires Firestore emulator)
+
+```bash
+# Terminal 1:
+firebase emulators:start
+
+# Terminal 2:
+npm run test:dealer:integration    # Game-engine guard tests (dealer/src/game-engine-guards.test.ts)
+```
+
+Integration tests run against the Firestore emulator and verify game-engine functions bail out safely in wrong phases/states.
+
+### E2E tests (requires emulators + dealer + frontend)
 
 ```bash
 # Terminal 1:
@@ -42,10 +68,16 @@ firebase emulators:start
 npm run dealer
 
 # Terminal 3:
-npm test
+npm test                           # Playwright E2E tests
 ```
 
-Tests are located in `e2e/`. They automatically clear emulator data between runs.
+E2E tests are in `e2e/`. They automatically clear emulator data between runs.
+
+### All dealer tests
+
+```bash
+npm run test:dealer                # Unit + integration (requires Firestore emulator)
+```
 
 ## Architecture
 

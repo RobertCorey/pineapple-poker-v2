@@ -7,7 +7,7 @@ export default defineConfig({
   workers: 1,
   use: {
     baseURL: 'http://localhost:5173',
-    headless: false,
+    headless: true,
     viewport: { width: 1280, height: 900 },
   },
   projects: [
