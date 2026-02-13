@@ -1,0 +1,97 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy-firebase:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Build functions
+        run: npm run build -w functions
+
+      - name: Authenticate to Firebase
+        run: |
+          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > /tmp/sa-key.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=/tmp/sa-key.json" >> "$GITHUB_ENV"
+
+      - name: Deploy to Firebase
+        run: npx firebase-tools deploy --project pineapple-poker-8f3
+
+      - name: Clean up credentials
+        if: always()
+        run: rm -f /tmp/sa-key.json
+
+  deploy-dealer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build dealer
+        run: npm run build -w dealer
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo '${{ secrets.GCE_SSH_PRIVATE_KEY }}' > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.GCE_VM_IP }} >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Deploy to VM
+        env:
+          VM_IP: ${{ secrets.GCE_VM_IP }}
+        run: |
+          rsync -az --delete \
+            -e "ssh -i ~/.ssh/deploy_key" \
+            dealer/ shared/ package.json package-lock.json \
+            deploy@${VM_IP}:/opt/pineapple/
+
+      - name: Install dependencies on VM
+        env:
+          VM_IP: ${{ secrets.GCE_VM_IP }}
+        run: |
+          ssh -i ~/.ssh/deploy_key deploy@${VM_IP} \
+            "cd /opt/pineapple && npm ci --workspace=dealer --omit=dev"
+
+      - name: Restart dealer service
+        env:
+          VM_IP: ${{ secrets.GCE_VM_IP }}
+        run: |
+          ssh -i ~/.ssh/deploy_key deploy@${VM_IP} \
+            "sudo systemctl restart pineapple-dealer"
+
+      - name: Health check
+        env:
+          VM_IP: ${{ secrets.GCE_VM_IP }}
+        run: |
+          sleep 3
+          ssh -i ~/.ssh/deploy_key deploy@${VM_IP} \
+            "curl -sf http://localhost:8080/health"
+
+      - name: Clean up SSH key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key

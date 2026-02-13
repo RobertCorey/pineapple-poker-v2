@@ -32,6 +32,7 @@ dealer/lib
 # Environment files
 .env
 .env.*
+!frontend/.env.production
 
 # Firebase
 .firebase/
