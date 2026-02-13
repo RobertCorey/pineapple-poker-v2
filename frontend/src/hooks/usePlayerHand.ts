@@ -7,13 +7,13 @@ interface HandDoc {
   cards: Card[];
 }
 
-export function usePlayerHand(uid: string | undefined) {
+export function usePlayerHand(uid: string | undefined, roomId: string | null) {
   const [hand, setHand] = useState<Card[]>([]);
 
   useEffect(() => {
-    if (!uid) return;
+    if (!uid || !roomId) return;
     const unsub = onSnapshot(
-      doc(db, 'games', 'current', 'hands', uid),
+      doc(db, 'games', roomId, 'hands', uid),
       (snap) => {
         if (snap.exists()) {
           const data = snap.data() as HandDoc;
@@ -24,7 +24,7 @@ export function usePlayerHand(uid: string | undefined) {
       },
     );
     return unsub;
-  }, [uid]);
+  }, [uid, roomId]);
 
   return hand;
 }

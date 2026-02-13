@@ -6,11 +6,8 @@ import { functions } from '../firebase.ts';
 import { PlayerGrid } from './PlayerGrid.tsx';
 import { HandPanel } from './HandPanel.tsx';
 import { RoundResults } from './RoundResults.tsx';
+import { MatchResults } from './MatchResults.tsx';
 import { useCountdown } from '../hooks/useCountdown.ts';
-
-const leaveGameFn = httpsCallable(functions, 'leaveGame');
-const joinGameFn = httpsCallable(functions, 'joinGame');
-const placeCardsFn = httpsCallable(functions, 'placeCards');
 
 function cardKey(c: Card): string {
   return `${c.rank}-${c.suit}`;
@@ -25,15 +22,16 @@ interface GamePageProps {
   gameState: GameState;
   hand: Card[];
   uid: string;
+  roomId: string;
+  onLeaveRoom: () => void;
 }
 
-export function GamePage({ gameState, hand, uid }: GamePageProps) {
+export function GamePage({ gameState, hand, uid, roomId, onLeaveRoom }: GamePageProps) {
   const [showResults, setShowResults] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [placements, setPlacements] = useState<Placement[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [leaving, setLeaving] = useState(false);
-  const [rejoining, setRejoining] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   // Auto-dismiss toast after 3 seconds
@@ -52,26 +50,28 @@ export function GamePage({ gameState, hand, uid }: GamePageProps) {
     gameState.phase === GamePhase.Street5
   );
 
-  const isComplete = gameState.phase === GamePhase.Complete || gameState.phase === GamePhase.Scoring;
+  const isRoundComplete = gameState.phase === GamePhase.Complete;
+  const isMatchComplete = gameState.phase === GamePhase.MatchComplete;
 
   const isInitialDeal = gameState.phase === GamePhase.InitialDeal;
-  const isStreet = !isInitialDeal && gameState.phase !== GamePhase.Waiting &&
-    gameState.phase !== GamePhase.Scoring && gameState.phase !== GamePhase.Complete;
+  const isStreet = !isInitialDeal && gameState.phase !== GamePhase.Lobby &&
+    gameState.phase !== GamePhase.Scoring && gameState.phase !== GamePhase.Complete &&
+    gameState.phase !== GamePhase.MatchComplete;
   const requiredPlacements = isInitialDeal ? 5 : 2;
 
-  // Auto-show results when game completes
+  // Auto-show results when round completes (not match complete — that has its own modal)
   useEffect(() => {
-    if (isComplete) {
+    if (isRoundComplete) {
       setShowResults(true);
     }
-  }, [isComplete]);
+  }, [isRoundComplete]);
 
   // Reset placement state when hand changes (new street dealt)
   useEffect(() => {
     setPlacements([]);
     setSelectedIndex(null);
     setSubmitting(false);
-  }, [hand.length, gameState.phase]);
+  }, [gameState.phase]);
 
   const placedCardKeys = new Set(placements.map((p) => cardKey(p.card)));
   const remainingHand = hand.filter((c) => !placedCardKeys.has(cardKey(c)));
@@ -120,7 +120,8 @@ export function GamePage({ gameState, hand, uid }: GamePageProps) {
           ? hand.find((c) => !newPlacedKeys.has(cardKey(c))) ?? null
           : null;
 
-        await placeCardsFn({ placements: placementData, discard });
+        const placeCardsFn = httpsCallable(functions, 'placeCards');
+        await placeCardsFn({ roomId, placements: placementData, discard });
       } catch (err) {
         console.error('Failed to place cards:', err);
         setToast('Failed to place cards — try again');
@@ -128,7 +129,7 @@ export function GamePage({ gameState, hand, uid }: GamePageProps) {
         setSubmitting(false);
       }
     }
-  }, [selectedIndex, remainingHand, mergedBoard, placements, submitting, requiredPlacements, isStreet, hand]);
+  }, [selectedIndex, remainingHand, mergedBoard, placements, submitting, requiredPlacements, isStreet, hand, roomId]);
 
   const handleCloseResults = useCallback(() => {
     setShowResults(false);
@@ -137,26 +138,16 @@ export function GamePage({ gameState, hand, uid }: GamePageProps) {
   const handleLeave = useCallback(async () => {
     setLeaving(true);
     try {
-      await leaveGameFn();
+      const leaveGameFn = httpsCallable(functions, 'leaveGame');
+      await leaveGameFn({ roomId });
+      onLeaveRoom();
     } catch (err) {
       console.error('Failed to leave:', err);
       setToast('Failed to leave game');
       setLeaving(false);
     }
-  }, []);
+  }, [roomId, onLeaveRoom]);
 
-  const handleRejoin = useCallback(async () => {
-    setRejoining(true);
-    try {
-      await joinGameFn({ displayName: gameState.players[uid]?.displayName });
-    } catch (err) {
-      console.error('Failed to rejoin:', err);
-      setToast('Failed to rejoin game');
-      setRejoining(false);
-    }
-  }, [gameState.players, uid]);
-
-  const isSittingOut = gameState.players[uid]?.sittingOut === true;
   const isObserver = !gameState.playerOrder.includes(uid);
 
   return (
@@ -165,13 +156,14 @@ export function GamePage({ gameState, hand, uid }: GamePageProps) {
       <div className="border-b border-gray-700 px-3 py-2 flex items-center justify-between text-xs">
         <span className="font-bold">Pineapple Poker</span>
         <div className="flex items-center gap-3">
+          <span className="text-green-400 tracking-widest">{roomId}</span>
           {showTimer && (
             <span className={countdown < 10 ? 'text-red-400' : 'text-yellow-400'}>
               {countdown}s
             </span>
           )}
           <span data-testid="phase-label" className="text-green-400">
-            {gameState.phase} | street {gameState.street}
+            {gameState.phase} | street {gameState.street} | round {gameState.round}/{gameState.totalRounds}
           </span>
           <span className="text-gray-500">
             {gameState.playerOrder.length} playing, {Object.keys(gameState.players).length} total
@@ -186,24 +178,10 @@ export function GamePage({ gameState, hand, uid }: GamePageProps) {
         </div>
       </div>
 
-      {/* Sitting-out banner */}
-      {isSittingOut && (
-        <div className="bg-amber-900 border-b border-amber-700 px-3 py-2 text-center text-xs text-amber-300 flex items-center justify-center gap-3">
-          <span>You timed out and are sitting out.</span>
-          <button
-            onClick={handleRejoin}
-            disabled={rejoining}
-            className="px-3 py-1 bg-amber-700 hover:bg-amber-600 disabled:bg-gray-700 text-white text-xs font-bold"
-          >
-            {rejoining ? '...' : 'Rejoin'}
-          </button>
-        </div>
-      )}
-
-      {/* Observer banner (not sitting out) */}
-      {isObserver && !isSittingOut && (
+      {/* Observer banner */}
+      {isObserver && (
         <div className="bg-blue-900 border-b border-blue-700 px-3 py-1 text-center text-xs text-blue-300">
-          Observing — you'll join the next round
+          Observing — you can join the next match
         </div>
       )}
 
@@ -229,14 +207,24 @@ export function GamePage({ gameState, hand, uid }: GamePageProps) {
         submitting={submitting}
       />
 
-      {/* Round results modal */}
-      {showResults && isComplete && (
+      {/* Round results modal (inter-round, not final) */}
+      {showResults && isRoundComplete && !isMatchComplete && (
         <RoundResults
           gameState={gameState}
           currentUid={uid}
           onClose={handleCloseResults}
         />
       )}
+
+      {/* Match results modal (final) */}
+      {isMatchComplete && (
+        <MatchResults
+          gameState={gameState}
+          currentUid={uid}
+          roomId={roomId}
+        />
+      )}
+
       {/* Toast */}
       {toast && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 bg-red-900 border border-red-700 px-4 py-2 text-xs text-red-300 shadow-lg z-50">

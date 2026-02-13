@@ -1,15 +1,51 @@
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from './hooks/useAuth.ts';
 import { useGameState } from './hooks/useGameState.ts';
 import { usePlayerHand } from './hooks/usePlayerHand.ts';
+import { RoomSelector } from './components/RoomSelector.tsx';
 import { Lobby } from './components/Lobby.tsx';
 import { GamePage } from './components/GamePage.tsx';
+import { GamePhase } from '@shared/core/types';
+
+function getRoomFromUrl(): string | null {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('room') || null;
+}
+
+function setRoomInUrl(roomId: string | null) {
+  const url = new URL(window.location.href);
+  if (roomId) {
+    url.searchParams.set('room', roomId);
+  } else {
+    url.searchParams.delete('room');
+  }
+  history.replaceState(null, '', url.toString());
+}
 
 function App() {
   const { user, loading: authLoading, displayName, setDisplayName, signIn } = useAuth();
-  const { gameState, loading: gameLoading } = useGameState();
-  const hand = usePlayerHand(user?.uid);
+  const [roomId, setRoomId] = useState<string | null>(getRoomFromUrl);
+  const { gameState, loading: gameLoading } = useGameState(roomId);
+  const hand = usePlayerHand(user?.uid, roomId);
 
-  if (authLoading || gameLoading) {
+  // Sync URL on popstate (back/forward)
+  useEffect(() => {
+    const onPopState = () => setRoomId(getRoomFromUrl());
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
+  const handleRoomJoined = useCallback((newRoomId: string) => {
+    setRoomId(newRoomId);
+    setRoomInUrl(newRoomId);
+  }, []);
+
+  const handleLeaveRoom = useCallback(() => {
+    setRoomId(null);
+    setRoomInUrl(null);
+  }, []);
+
+  if (authLoading) {
     return (
       <div className="min-h-screen bg-green-900 text-white flex items-center justify-center">
         <div className="text-gray-400">Loading...</div>
@@ -17,25 +53,52 @@ function App() {
     );
   }
 
+  // No room selected — show room selector
+  if (!roomId) {
+    return (
+      <RoomSelector
+        displayName={displayName}
+        setDisplayName={setDisplayName}
+        signIn={signIn}
+        onRoomJoined={handleRoomJoined}
+      />
+    );
+  }
+
+  // Room selected but still loading game state
+  if (gameLoading) {
+    return (
+      <div className="min-h-screen bg-green-900 text-white flex items-center justify-center">
+        <div className="text-gray-400">Loading room...</div>
+      </div>
+    );
+  }
+
   const isInGame = user && gameState?.players[user.uid] !== undefined;
 
-  if (isInGame) {
+  // Show Lobby when not in game, or when in game but in lobby phase (pre-match)
+  if (!isInGame || gameState?.phase === GamePhase.Lobby) {
     return (
-      <GamePage
+      <Lobby
+        uid={user?.uid ?? ''}
+        displayName={displayName}
+        setDisplayName={setDisplayName}
+        signIn={signIn}
         gameState={gameState}
-        hand={hand}
-        uid={user.uid}
+        isInGame={!!isInGame}
+        roomId={roomId}
+        onLeaveRoom={handleLeaveRoom}
       />
     );
   }
 
   return (
-    <Lobby
-      uid={user?.uid ?? ''}
-      displayName={displayName}
-      setDisplayName={setDisplayName}
-      signIn={signIn}
+    <GamePage
       gameState={gameState}
+      hand={hand}
+      uid={user.uid}
+      roomId={roomId}
+      onLeaveRoom={handleLeaveRoom}
     />
   );
 }

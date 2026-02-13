@@ -41,10 +41,12 @@ export function HandPanel({
     onSelectCard(selectedIndex === index ? null : index);
   }, [selectedIndex, submitting, onSelectCard]);
 
-  if (gameState.phase === GamePhase.Waiting) {
+  if (gameState.phase === GamePhase.Lobby) {
     return (
       <div className="bg-gray-900/80 border-t border-gray-700 p-4 text-center">
-        <span className="text-gray-400">Round starting soon...</span>
+        <span className="text-gray-400">
+          {gameState.round === 0 ? 'Waiting for host to start match...' : 'Next round starting...'}
+        </span>
       </div>
     );
   }
