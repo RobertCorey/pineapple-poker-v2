@@ -172,7 +172,7 @@ export class Dealer {
   }
 
   private onPlacementTimeout(roomId: string): void {
-    console.log(`[Dealer] [${roomId}] Placement timeout fired — auto-fouling`);
+    console.log(`[Dealer] [${roomId}] Placement timeout fired — auto-placing cards`);
     (async () => {
       await handlePhaseTimeout(this.db, roomId);
       await checkAndAdvance(this.db, roomId);

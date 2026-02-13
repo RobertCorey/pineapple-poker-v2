@@ -2,22 +2,35 @@ import type { Board, Card, Row } from '@shared/core/types';
 import { evaluate5CardHand, evaluate3CardHand } from '@shared/game-logic/hand-evaluation';
 import { describeHand, describe3CardHand } from '../utils/handDescription.ts';
 import { CardComponent } from './CardComponent.tsx';
+import type { CardSize } from './CardComponent.tsx';
+
+const SPACER_W: Record<CardSize, string> = {
+  sm: 'w-8',
+  md: 'w-10',
+  lg: 'w-14',
+};
+
+const EMPTY_SLOT: Record<CardSize, string> = {
+  sm: 'w-8 h-11 rounded',
+  md: 'w-10 h-14 rounded-md',
+  lg: 'w-14 h-20 rounded-lg',
+};
 
 interface SlotProps {
   card: Card | null;
-  small?: boolean;
+  size?: CardSize;
 }
 
-function CardSlot({ card, small }: SlotProps) {
+function CardSlot({ card, size = 'lg' }: SlotProps) {
   return (
     <div>
       {card ? (
-        <CardComponent card={card} small={small} />
+        <CardComponent card={card} size={size} />
       ) : (
         <div
           className={`
-            ${small ? 'w-10 h-14' : 'w-14 h-20'}
-            rounded-lg border-2 border-dashed
+            ${EMPTY_SLOT[size]}
+            border-2 border-dashed
             flex items-center justify-center
             border-gray-600 bg-gray-800/30
           `}
@@ -53,7 +66,9 @@ interface PlayerBoardProps {
   isCurrentPlayer?: boolean;
   onRowClick?: (row: Row) => void;
   hasCardSelected?: boolean;
+  /** @deprecated use `cardSize` instead */
   small?: boolean;
+  cardSize?: CardSize;
   score?: number;
   hasPlaced?: boolean;
   isObserver?: boolean;
@@ -62,8 +77,9 @@ interface PlayerBoardProps {
 
 export function PlayerBoard({
   board, playerName, fouled, isCurrentPlayer, onRowClick, hasCardSelected, small,
-  score, hasPlaced, isObserver, disconnected,
+  cardSize, score, hasPlaced, isObserver, disconnected,
 }: PlayerBoardProps) {
+  const size: CardSize = cardSize ?? (small ? 'md' : 'lg');
   const topSlots = padRow(board.top, 3);
   const middleSlots = padRow(board.middle, 5);
   const bottomSlots = padRow(board.bottom, 5);
@@ -75,12 +91,14 @@ export function PlayerBoard({
   const rowClickable = (hasSpace: boolean) =>
     isCurrentPlayer && hasCardSelected && onRowClick && hasSpace;
 
+  const isSmallText = size === 'sm' || size === 'md';
+
   return (
     <div className={`
       border p-2
       ${isCurrentPlayer ? 'border-green-600 bg-green-900/20' : 'border-gray-700 bg-gray-800/20'}
     `}>
-      <div className={`text-center mb-1 ${small ? 'text-xs' : 'text-sm'} text-gray-300 flex items-center justify-center gap-2`}>
+      <div className={`text-center mb-1 ${isSmallText ? 'text-xs' : 'text-sm'} text-gray-300 flex items-center justify-center gap-2`}>
         <span>{playerName}</span>
         {score !== undefined && (
           <span className={`text-xs ${score >= 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -106,15 +124,11 @@ export function PlayerBoard({
           ${rowClickable(topHasSpace) ? 'cursor-pointer bg-yellow-900/20 hover:bg-yellow-900/40 ring-1 ring-yellow-500/40' : ''}
         `}
       >
-        <div className={small ? 'w-10' : 'w-14'} />
+        <div className={SPACER_W[size]} />
         {topSlots.map((card, i) => (
-          <CardSlot
-            key={`top-${i}`}
-            card={card}
-            small={small}
-          />
+          <CardSlot key={`top-${i}`} card={card} size={size} />
         ))}
-        <div className={small ? 'w-10' : 'w-14'} />
+        <div className={SPACER_W[size]} />
       </div>
       <RowEval cards={board.top} size={3} isTop />
 
@@ -128,11 +142,7 @@ export function PlayerBoard({
         `}
       >
         {middleSlots.map((card, i) => (
-          <CardSlot
-            key={`mid-${i}`}
-            card={card}
-            small={small}
-          />
+          <CardSlot key={`mid-${i}`} card={card} size={size} />
         ))}
       </div>
       <RowEval cards={board.middle} size={5} isTop={false} />
@@ -147,11 +157,7 @@ export function PlayerBoard({
         `}
       >
         {bottomSlots.map((card, i) => (
-          <CardSlot
-            key={`bot-${i}`}
-            card={card}
-            small={small}
-          />
+          <CardSlot key={`bot-${i}`} card={card} size={size} />
         ))}
       </div>
       <RowEval cards={board.bottom} size={5} isTop={false} />
