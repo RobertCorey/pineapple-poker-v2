@@ -71,7 +71,7 @@ async function removePlayer(uid: string, roomId: string): Promise<void> {
 
 // ---- joinGame ----
 
-export const joinGame = onCall(async (request) => {
+export const joinGame = onCall({ maxInstances: 10 }, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) {
     throw new HttpsError('unauthenticated', 'Must be signed in to join.');
@@ -160,7 +160,7 @@ export const joinGame = onCall(async (request) => {
 
 // ---- leaveGame ----
 
-export const leaveGame = onCall(async (request) => {
+export const leaveGame = onCall({ maxInstances: 10 }, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) {
     throw new HttpsError('unauthenticated', 'Must be signed in.');
@@ -182,7 +182,7 @@ interface PlaceCardsData {
   discard?: Card;
 }
 
-export const placeCards = onCall(async (request) => {
+export const placeCards = onCall({ maxInstances: 10 }, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) {
     throw new HttpsError('unauthenticated', 'Must be signed in.');
@@ -319,7 +319,7 @@ export const placeCards = onCall(async (request) => {
 
 // ---- startMatch ----
 
-export const startMatch = onCall(async (request) => {
+export const startMatch = onCall({ maxInstances: 10 }, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) {
     throw new HttpsError('unauthenticated', 'Must be signed in.');
@@ -363,7 +363,7 @@ export const startMatch = onCall(async (request) => {
 
 // ---- playAgain ----
 
-export const playAgain = onCall(async (request) => {
+export const playAgain = onCall({ maxInstances: 10 }, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) {
     throw new HttpsError('unauthenticated', 'Must be signed in.');
