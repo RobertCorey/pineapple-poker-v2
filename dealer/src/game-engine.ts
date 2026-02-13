@@ -15,7 +15,7 @@ import {
 } from '../../shared/core/constants';
 import { createShuffledDeck, dealCards } from '../../shared/game-logic/deck';
 import { scoreAllPlayers, isFoul } from '../../shared/game-logic/scoring';
-import { GAME_DOC, handDoc, deckDoc } from '../../shared/core/firestore-paths';
+import { gameDoc, handDoc, deckDoc } from '../../shared/core/firestore-paths';
 import { emptyBoard, phaseForStreet } from '../../shared/game-logic/board-utils';
 
 // ---- Helper: all active (non-fouled) players have placed their cards ----
@@ -35,8 +35,8 @@ function allActivePlaced(
  * Start a new round if >=2 players in playerOrder.
  * Deal initial 5 cards to each player.
  */
-export async function maybeStartRound(db: Firestore): Promise<boolean> {
-  const gameRef = db.doc(GAME_DOC);
+export async function maybeStartRound(db: Firestore, roomId: string): Promise<boolean> {
+  const gameRef = db.doc(gameDoc(roomId));
 
   return db.runTransaction(async (tx) => {
     const snap = await tx.get(gameRef);
@@ -44,8 +44,11 @@ export async function maybeStartRound(db: Firestore): Promise<boolean> {
 
     const game = snap.data()!;
 
-    // Can only start from Waiting or Complete
-    if (game.phase !== GP.Waiting && game.phase !== GP.Complete) return false;
+    // Can only start from Lobby phase
+    if (game.phase !== GP.Lobby) return false;
+
+    // Host must have pressed Start (round >= 1)
+    if ((game.round as number) < 1) return false;
 
     const players = game.players as Record<string, unknown>;
     const uids = game.playerOrder as string[];
@@ -67,12 +70,11 @@ export async function maybeStartRound(db: Firestore): Promise<boolean> {
         ...p,
         board: emptyBoard(),
         currentHand: dealt,
-        score: 0,
         fouled: false,
       };
 
-      tx.set(db.doc(deckDoc(uid)), { cards: remaining });
-      tx.set(db.doc(handDoc(uid)), { cards: dealt });
+      tx.set(db.doc(deckDoc(uid, roomId)), { cards: remaining });
+      tx.set(db.doc(handDoc(uid, roomId)), { cards: dealt });
     }
 
     // Preserve observers (in players but not in playerOrder)
@@ -106,8 +108,8 @@ export async function maybeStartRound(db: Firestore): Promise<boolean> {
  * Skip dealing to fouled players.
  * If this was the last street, transition to scoring.
  */
-export async function advanceStreet(db: Firestore): Promise<'scoring' | 'advanced' | 'noop'> {
-  const gameRef = db.doc(GAME_DOC);
+export async function advanceStreet(db: Firestore, roomId: string): Promise<'scoring' | 'advanced' | 'noop'> {
+  const gameRef = db.doc(gameDoc(roomId));
 
   return db.runTransaction(async (tx) => {
     const snap = await tx.get(gameRef);
@@ -151,7 +153,7 @@ export async function advanceStreet(db: Firestore): Promise<'scoring' | 'advance
     for (const uid of uids) {
       const p = players[uid] as { fouled: boolean };
       if (p.fouled) continue;
-      const deckSnap = await tx.get(db.doc(deckDoc(uid)));
+      const deckSnap = await tx.get(db.doc(deckDoc(uid, roomId)));
       deckSnaps.set(uid, (deckSnap.data()?.cards ?? []) as Card[]);
     }
 
@@ -177,8 +179,8 @@ export async function advanceStreet(db: Firestore): Promise<'scoring' | 'advance
         currentHand: dealt,
       };
 
-      tx.set(db.doc(deckDoc(uid)), { cards: remaining });
-      tx.set(db.doc(handDoc(uid)), { cards: dealt });
+      tx.set(db.doc(deckDoc(uid, roomId)), { cards: remaining });
+      tx.set(db.doc(handDoc(uid, roomId)), { cards: dealt });
     }
 
     // Preserve observers (in players but not in playerOrder)
@@ -204,8 +206,8 @@ export async function advanceStreet(db: Firestore): Promise<'scoring' | 'advance
  * Score the round after all 13 cards have been placed.
  * Build fouls map from auto-fouled players + natural fouls.
  */
-export async function scoreRound(db: Firestore): Promise<void> {
-  const gameRef = db.doc(GAME_DOC);
+export async function scoreRound(db: Firestore, roomId: string): Promise<void> {
+  const gameRef = db.doc(gameDoc(roomId));
 
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(gameRef);
@@ -214,7 +216,7 @@ export async function scoreRound(db: Firestore): Promise<void> {
     const game = snap.data()!;
     if (game.phase !== GP.Scoring) return;
 
-    const players = game.players as Record<string, { board: Board; uid: string; fouled: boolean }>;
+    const players = game.players as Record<string, { board: Board; uid: string; fouled: boolean; score: number }>;
     const uids = game.playerOrder as string[];
 
     // Build boards map and fouls map
@@ -228,7 +230,7 @@ export async function scoreRound(db: Firestore): Promise<void> {
 
     const result = scoreAllPlayers(boards, fouls);
 
-    // Build results map for game document
+    // Build results map and accumulate scores
     const roundResults: Record<string, { netScore: number; fouled: boolean }> = {};
     for (const ps of result.players) {
       roundResults[ps.uid] = {
@@ -237,12 +239,15 @@ export async function scoreRound(db: Firestore): Promise<void> {
       };
     }
 
-    // Update game state: transition to Complete
+    // Update game state
     const updatedPlayers: Record<string, unknown> = {};
     for (const uid of uids) {
+      const p = players[uid] as { score: number };
+      const roundScore = roundResults[uid]?.netScore ?? 0;
       updatedPlayers[uid] = {
         ...players[uid],
         currentHand: [],
+        score: p.score + roundScore,
       };
     }
 
@@ -253,22 +258,27 @@ export async function scoreRound(db: Firestore): Promise<void> {
       }
     }
 
+    const currentRound = game.round as number;
+    const totalRounds = game.totalRounds as number;
+    const isFinalRound = currentRound >= totalRounds;
+
     tx.update(gameRef, {
-      phase: GP.Complete,
+      phase: isFinalRound ? GP.MatchComplete : GP.Complete,
       roundResults,
       players: updatedPlayers,
-      phaseDeadline: Date.now() + INTER_ROUND_DELAY_MS,
+      phaseDeadline: isFinalRound ? null : Date.now() + INTER_ROUND_DELAY_MS,
       updatedAt: Date.now(),
     });
   });
 }
 
 /**
- * Transition from Complete back to Waiting for next round.
- * Promotes observers into playerOrder.
+ * Transition from Complete back to Lobby for next round.
+ * playerOrder stays fixed during a match (no observer promotion).
+ * Scores are preserved (cumulative). Round is incremented.
  */
-export async function resetForNextRound(db: Firestore): Promise<void> {
-  const gameRef = db.doc(GAME_DOC);
+export async function resetForNextRound(db: Firestore, roomId: string): Promise<void> {
+  const gameRef = db.doc(gameDoc(roomId));
 
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(gameRef);
@@ -279,65 +289,37 @@ export async function resetForNextRound(db: Firestore): Promise<void> {
 
     const players = game.players as Record<string, Record<string, unknown>>;
     const uids = game.playerOrder as string[];
+    const currentRound = game.round as number;
 
-    const updatedPlayerOrder: string[] = [];
     const updatedPlayers: Record<string, unknown> = {};
 
-    // Reset active players — sitting-out players become observers
+    // Reset active players' boards/hands but keep scores
     for (const uid of uids) {
-      const player = players[uid];
-      if (player.sittingOut) {
-        // Demote to observer (keep in players, exclude from playerOrder)
-        updatedPlayers[uid] = {
-          ...player,
-          board: emptyBoard(),
-          currentHand: [],
-          score: 0,
-          fouled: false,
-        };
-      } else {
-        updatedPlayerOrder.push(uid);
-        updatedPlayers[uid] = {
-          ...player,
-          board: emptyBoard(),
-          currentHand: [],
-          score: 0,
-          fouled: false,
-        };
-      }
+      updatedPlayers[uid] = {
+        ...players[uid],
+        board: emptyBoard(),
+        currentHand: [],
+        fouled: false,
+      };
     }
 
-    // Promote observers into playerOrder (skip sitting-out observers)
+    // Preserve observers (in players but not in playerOrder)
     for (const uid of Object.keys(players)) {
       if (!uids.includes(uid)) {
-        const player = players[uid];
-        if (player.sittingOut) {
-          // Stay as observer
-          updatedPlayers[uid] = {
-            ...player,
-            board: emptyBoard(),
-            currentHand: [],
-            score: 0,
-            fouled: false,
-          };
-        } else {
-          updatedPlayerOrder.push(uid);
-          updatedPlayers[uid] = {
-            ...player,
-            board: emptyBoard(),
-            currentHand: [],
-            score: 0,
-            fouled: false,
-          };
-        }
+        updatedPlayers[uid] = {
+          ...players[uid],
+          board: emptyBoard(),
+          currentHand: [],
+          fouled: false,
+        };
       }
     }
 
     tx.update(gameRef, {
-      phase: GP.Waiting,
+      phase: GP.Lobby,
       street: 0,
       players: updatedPlayers,
-      playerOrder: updatedPlayerOrder,
+      round: currentRound + 1,
       phaseDeadline: null,
       roundResults: FieldValue.delete(),
       updatedAt: Date.now(),
@@ -349,8 +331,8 @@ export async function resetForNextRound(db: Firestore): Promise<void> {
  * Handle phase timeout: mark unplaced players as fouled, clear their hands,
  * then the dealer will detect the state change and advance.
  */
-export async function handlePhaseTimeout(db: Firestore): Promise<void> {
-  const gameRef = db.doc(GAME_DOC);
+export async function handlePhaseTimeout(db: Firestore, roomId: string): Promise<void> {
+  const gameRef = db.doc(gameDoc(roomId));
 
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(gameRef);
@@ -383,15 +365,14 @@ export async function handlePhaseTimeout(db: Firestore): Promise<void> {
       if (hand.length === 0) continue;
       if (player.fouled) continue;
 
-      // Mark as fouled + sitting out, clear hand and board
+      // Mark as fouled, clear hand and board
       players[uid] = {
         ...player,
         fouled: true,
-        sittingOut: true,
         currentHand: [],
         board: emptyBoard(),
       };
-      tx.set(db.doc(handDoc(uid)), { cards: [] });
+      tx.set(db.doc(handDoc(uid, roomId)), { cards: [] });
       changed = true;
     }
 
@@ -414,14 +395,14 @@ export async function handlePhaseTimeout(db: Firestore): Promise<void> {
  * Loops (instead of recursing) to handle the case where all remaining
  * players are fouled after advancing — each iteration is a new transaction.
  */
-export async function checkAndAdvance(db: Firestore): Promise<void> {
+export async function checkAndAdvance(db: Firestore, roomId: string): Promise<void> {
   const MAX_ITERATIONS = TOTAL_STREETS + 1; // safety bound
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
-    const result = await advanceStreet(db);
+    const result = await advanceStreet(db, roomId);
 
     if (result === 'scoring') {
-      await scoreRound(db);
+      await scoreRound(db, roomId);
       return;
     }
 

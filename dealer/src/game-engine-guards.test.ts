@@ -5,12 +5,12 @@
  *
  * REQUIRES: firebase emulators running (firebase emulators:start)
  */
-import { describe, it, expect, beforeEach, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import * as admin from 'firebase-admin';
 import type { Firestore } from 'firebase-admin/firestore';
 import { GamePhase as GP } from '../../shared/core/types';
 import type { Card } from '../../shared/core/types';
-import { GAME_DOC, handDoc } from '../../shared/core/firestore-paths';
+import { gameDoc, handDoc } from '../../shared/core/firestore-paths';
 import { emptyBoard } from '../../shared/game-logic/board-utils';
 import { handlePhaseTimeout } from './game-engine';
 import { advanceStreet } from './game-engine';
@@ -18,6 +18,7 @@ import { advanceStreet } from './game-engine';
 // ---- Setup ----
 
 let db: Firestore;
+let testCounter = 0;
 
 beforeAll(() => {
   process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:8080';
@@ -27,17 +28,10 @@ beforeAll(() => {
   db = app.firestore();
 });
 
-async function clearFirestore() {
-  const projectId = 'pineapple-poker-8f3';
-  await fetch(
-    `http://127.0.0.1:8080/emulator/v1/projects/${projectId}/databases/(default)/documents`,
-    { method: 'DELETE' },
-  );
+/** Generate a unique roomId per test to avoid state collisions */
+function uniqueRoomId(): string {
+  return `test_${Date.now()}_${testCounter++}`;
 }
-
-beforeEach(async () => {
-  await clearFirestore();
-});
 
 // ---- Helpers ----
 
@@ -49,9 +43,9 @@ function makeHand(n: number): Card[] {
   }));
 }
 
-async function setGameState(state: Record<string, unknown>) {
-  await db.doc(GAME_DOC).set({
-    phase: GP.Waiting,
+async function setGameState(roomId: string, state: Record<string, unknown>) {
+  await db.doc(gameDoc(roomId)).set({
+    phase: GP.Lobby,
     street: 0,
     playerOrder: [],
     players: {},
@@ -61,8 +55,8 @@ async function setGameState(state: Record<string, unknown>) {
   });
 }
 
-async function getGame() {
-  const snap = await db.doc(GAME_DOC).get();
+async function getGame(roomId: string) {
+  const snap = await db.doc(gameDoc(roomId)).get();
   return snap.data()!;
 }
 
@@ -70,7 +64,8 @@ async function getGame() {
 
 describe('handlePhaseTimeout guards', () => {
   it('does nothing when phase is scoring', async () => {
-    await setGameState({
+    const roomId = uniqueRoomId();
+    await setGameState(roomId, {
       phase: GP.Scoring,
       street: 5,
       playerOrder: ['p1', 'p2'],
@@ -81,8 +76,8 @@ describe('handlePhaseTimeout guards', () => {
       phaseDeadline: Date.now() - 1000, // expired
     });
 
-    await handlePhaseTimeout(db);
-    const game = await getGame();
+    await handlePhaseTimeout(db, roomId);
+    const game = await getGame(roomId);
 
     // Players should NOT be fouled — wrong phase
     expect((game.players as Record<string, { fouled: boolean }>).p1.fouled).toBe(false);
@@ -90,7 +85,8 @@ describe('handlePhaseTimeout guards', () => {
   });
 
   it('does nothing when phase is complete', async () => {
-    await setGameState({
+    const roomId = uniqueRoomId();
+    await setGameState(roomId, {
       phase: GP.Complete,
       street: 5,
       playerOrder: ['p1'],
@@ -100,14 +96,15 @@ describe('handlePhaseTimeout guards', () => {
       phaseDeadline: Date.now() - 1000,
     });
 
-    await handlePhaseTimeout(db);
-    const game = await getGame();
+    await handlePhaseTimeout(db, roomId);
+    const game = await getGame(roomId);
 
     expect((game.players as Record<string, { fouled: boolean }>).p1.fouled).toBe(false);
   });
 
   it('does nothing when deadline has not expired', async () => {
-    await setGameState({
+    const roomId = uniqueRoomId();
+    await setGameState(roomId, {
       phase: GP.InitialDeal,
       street: 1,
       playerOrder: ['p1', 'p2'],
@@ -119,17 +116,18 @@ describe('handlePhaseTimeout guards', () => {
     });
 
     // Set up hand docs so the function can clear them
-    await db.doc(handDoc('p1')).set({ cards: makeHand(5) });
+    await db.doc(handDoc('p1', roomId)).set({ cards: makeHand(5) });
 
-    await handlePhaseTimeout(db);
-    const game = await getGame();
+    await handlePhaseTimeout(db, roomId);
+    const game = await getGame(roomId);
 
     // p1 should NOT be fouled — deadline hasn't passed
     expect((game.players as Record<string, { fouled: boolean }>).p1.fouled).toBe(false);
   });
 
   it('fouls unplaced players when deadline has expired in placement phase', async () => {
-    await setGameState({
+    const roomId = uniqueRoomId();
+    await setGameState(roomId, {
       phase: GP.InitialDeal,
       street: 1,
       playerOrder: ['p1', 'p2'],
@@ -140,10 +138,10 @@ describe('handlePhaseTimeout guards', () => {
       phaseDeadline: Date.now() - 1000, // expired
     });
 
-    await db.doc(handDoc('p1')).set({ cards: makeHand(5) });
+    await db.doc(handDoc('p1', roomId)).set({ cards: makeHand(5) });
 
-    await handlePhaseTimeout(db);
-    const game = await getGame();
+    await handlePhaseTimeout(db, roomId);
+    const game = await getGame(roomId);
 
     // p1 fouled (had cards), p2 not fouled (already placed)
     const players = game.players as Record<string, { fouled: boolean; currentHand: Card[] }>;
@@ -158,7 +156,8 @@ describe('handlePhaseTimeout guards', () => {
 
 describe('advanceStreet guards', () => {
   it('returns noop when phase is scoring', async () => {
-    await setGameState({
+    const roomId = uniqueRoomId();
+    await setGameState(roomId, {
       phase: GP.Scoring,
       street: 5,
       playerOrder: ['p1'],
@@ -167,12 +166,13 @@ describe('advanceStreet guards', () => {
       },
     });
 
-    const result = await advanceStreet(db);
+    const result = await advanceStreet(db, roomId);
     expect(result).toBe('noop');
   });
 
   it('returns noop when phase is complete', async () => {
-    await setGameState({
+    const roomId = uniqueRoomId();
+    await setGameState(roomId, {
       phase: GP.Complete,
       street: 5,
       playerOrder: ['p1'],
@@ -181,13 +181,14 @@ describe('advanceStreet guards', () => {
       },
     });
 
-    const result = await advanceStreet(db);
+    const result = await advanceStreet(db, roomId);
     expect(result).toBe('noop');
   });
 
-  it('returns noop when phase is waiting', async () => {
-    await setGameState({
-      phase: GP.Waiting,
+  it('returns noop when phase is lobby', async () => {
+    const roomId = uniqueRoomId();
+    await setGameState(roomId, {
+      phase: GP.Lobby,
       street: 0,
       playerOrder: ['p1', 'p2'],
       players: {
@@ -196,12 +197,13 @@ describe('advanceStreet guards', () => {
       },
     });
 
-    const result = await advanceStreet(db);
+    const result = await advanceStreet(db, roomId);
     expect(result).toBe('noop');
   });
 
   it('returns noop when not all players have placed', async () => {
-    await setGameState({
+    const roomId = uniqueRoomId();
+    await setGameState(roomId, {
       phase: GP.InitialDeal,
       street: 1,
       playerOrder: ['p1', 'p2'],
@@ -211,12 +213,13 @@ describe('advanceStreet guards', () => {
       },
     });
 
-    const result = await advanceStreet(db);
+    const result = await advanceStreet(db, roomId);
     expect(result).toBe('noop');
   });
 
   it('returns scoring when street >= 5 and all placed', async () => {
-    await setGameState({
+    const roomId = uniqueRoomId();
+    await setGameState(roomId, {
       phase: GP.Street5,
       street: 5,
       playerOrder: ['p1', 'p2'],
@@ -226,10 +229,10 @@ describe('advanceStreet guards', () => {
       },
     });
 
-    const result = await advanceStreet(db);
+    const result = await advanceStreet(db, roomId);
     expect(result).toBe('scoring');
 
-    const game = await getGame();
+    const game = await getGame(roomId);
     expect(game.phase).toBe(GP.Scoring);
   });
 });
