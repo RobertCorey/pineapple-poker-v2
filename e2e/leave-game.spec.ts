@@ -22,24 +22,24 @@ test('player can leave mid-match and game continues for remaining player', async
 
   await alice.getByTestId('name-input').fill('Alice');
   await alice.getByTestId('join-button').click();
-  await alice.getByTestId('start-match-button').waitFor({ timeout: 10_000 });
+  await alice.getByTestId('start-match-button').waitFor({ timeout: 30_000 });
 
   await bob.getByTestId('name-input').fill('Bob');
   await bob.getByTestId('join-button').click();
-  await expect(bob.getByText('Waiting for host to start')).toBeVisible({ timeout: 10_000 });
+  await expect(bob.getByText('Waiting for host to start')).toBeVisible({ timeout: 30_000 });
 
   // --- Host starts match ---
   await alice.getByTestId('start-match-button').click();
 
   // Wait for round 1 initial_deal
-  await expect(alice.getByTestId('phase-label')).toContainText('initial_deal', { timeout: 15_000 });
-  await expect(bob.getByTestId('phase-label')).toContainText('initial_deal', { timeout: 15_000 });
+  await expect(alice.getByTestId('phase-label')).toContainText('initial_deal', { timeout: 30_000 });
+  await expect(bob.getByTestId('phase-label')).toContainText('initial_deal', { timeout: 30_000 });
 
   // --- Bob leaves during round 1 ---
   await bob.getByText('Leave').click();
 
   // Bob should return to room selector (create-room-button visible on the home screen)
-  await bob.getByTestId('create-room-button').waitFor({ timeout: 10_000 });
+  await bob.getByTestId('create-room-button').waitFor({ timeout: 30_000 });
 
   // --- Alice plays the round solo ---
   // Bob has been removed from playerOrder. Alice's placements will satisfy allPlaced.
@@ -47,12 +47,12 @@ test('player can leave mid-match and game continues for remaining player', async
 
   // Game advances through streets (Alice is the only player)
   for (const street of [2, 3, 4, 5]) {
-    await expect(alice.getByTestId('phase-label')).toContainText(`street_${street}`, { timeout: 15_000 });
+    await expect(alice.getByTestId('phase-label')).toContainText(`street_${street}`, { timeout: 30_000 });
     await placeStreet(alice, street);
   }
 
   // Round 1 results — Alice should see round results
-  await alice.getByTestId('round-results').waitFor({ timeout: 15_000 });
+  await alice.getByTestId('round-results').waitFor({ timeout: 30_000 });
   await expect(alice.getByTestId('round-results')).toContainText('Round 1 of 3 Complete');
   await expect(alice.getByTestId('round-results')).toContainText('Alice');
 

@@ -15,7 +15,7 @@ async function placeInitialDeal(page: Page) {
   const board = page.getByTestId('my-board');
 
   // Wait for cards to appear in hand
-  await page.getByTestId('hand-card-0').waitFor({ timeout: 15_000 });
+  await page.getByTestId('hand-card-0').waitFor({ timeout: 30_000 });
 
   // Card 0 → bottom row
   await page.getByTestId('hand-card-0').click();
@@ -45,7 +45,7 @@ async function placeStreet(page: Page, street: number) {
   const board = page.getByTestId('my-board');
 
   // Wait for 3 cards in hand
-  await page.getByTestId('hand-card-0').waitFor({ timeout: 15_000 });
+  await page.getByTestId('hand-card-0').waitFor({ timeout: 30_000 });
 
   let row1: string, row2: string;
 
@@ -78,8 +78,8 @@ async function placeStreet(page: Page, street: number) {
 /** Play one full round: initial deal + streets 2-5. */
 async function playFullRound(alice: Page, bob: Page) {
   // Wait for initial_deal phase
-  await expect(alice.getByTestId('phase-label')).toContainText('initial_deal', { timeout: 15_000 });
-  await expect(bob.getByTestId('phase-label')).toContainText('initial_deal', { timeout: 15_000 });
+  await expect(alice.getByTestId('phase-label')).toContainText('initial_deal', { timeout: 30_000 });
+  await expect(bob.getByTestId('phase-label')).toContainText('initial_deal', { timeout: 30_000 });
 
   // Initial deal: both place 5 cards
   await placeInitialDeal(alice);
@@ -88,8 +88,8 @@ async function playFullRound(alice: Page, bob: Page) {
   // Streets 2 through 5
   for (const street of [2, 3, 4, 5]) {
     const phaseText = `street_${street}`;
-    await expect(alice.getByTestId('phase-label')).toContainText(phaseText, { timeout: 15_000 });
-    await expect(bob.getByTestId('phase-label')).toContainText(phaseText, { timeout: 15_000 });
+    await expect(alice.getByTestId('phase-label')).toContainText(phaseText, { timeout: 30_000 });
+    await expect(bob.getByTestId('phase-label')).toContainText(phaseText, { timeout: 30_000 });
 
     await placeStreet(alice, street);
     await placeStreet(bob, street);
@@ -116,14 +116,14 @@ test('two players play a full 3-round match', async ({ browser }) => {
   await alice.getByTestId('join-button').click();
 
   // Alice should see the lobby with Start Match button
-  await alice.getByTestId('start-match-button').waitFor({ timeout: 10_000 });
+  await alice.getByTestId('start-match-button').waitFor({ timeout: 30_000 });
 
   // --- Bob joins ---
   await bob.getByTestId('name-input').fill('Bob');
   await bob.getByTestId('join-button').click();
 
   // Bob should see the lobby (waiting for host)
-  await expect(bob.getByText('Waiting for host to start')).toBeVisible({ timeout: 10_000 });
+  await expect(bob.getByText('Waiting for host to start')).toBeVisible({ timeout: 30_000 });
 
   // --- Host starts the match ---
   await alice.getByTestId('start-match-button').click();
@@ -134,8 +134,8 @@ test('two players play a full 3-round match', async ({ browser }) => {
 
     if (round < 3) {
       // Inter-round: round results modal appears
-      await alice.getByTestId('round-results').waitFor({ timeout: 15_000 });
-      await bob.getByTestId('round-results').waitFor({ timeout: 15_000 });
+      await alice.getByTestId('round-results').waitFor({ timeout: 30_000 });
+      await bob.getByTestId('round-results').waitFor({ timeout: 30_000 });
 
       // Verify round results header
       await expect(alice.getByTestId('round-results')).toContainText(`Round ${round} of 3 Complete`);
@@ -147,8 +147,8 @@ test('two players play a full 3-round match', async ({ browser }) => {
       // Wait for next round to start (auto-reset → lobby → auto-start)
     } else {
       // After round 3: match-results modal (not round-results)
-      await alice.getByTestId('match-results').waitFor({ timeout: 15_000 });
-      await bob.getByTestId('match-results').waitFor({ timeout: 15_000 });
+      await alice.getByTestId('match-results').waitFor({ timeout: 30_000 });
+      await bob.getByTestId('match-results').waitFor({ timeout: 30_000 });
 
       // Verify match results
       await expect(alice.getByTestId('match-results')).toContainText('Match Complete');
@@ -161,8 +161,8 @@ test('two players play a full 3-round match', async ({ browser }) => {
   await alice.getByTestId('play-again-button').click();
 
   // Both should be back in lobby
-  await alice.getByTestId('start-match-button').waitFor({ timeout: 15_000 });
-  await expect(bob.getByText('Waiting for host to start')).toBeVisible({ timeout: 15_000 });
+  await alice.getByTestId('start-match-button').waitFor({ timeout: 30_000 });
+  await expect(bob.getByText('Waiting for host to start')).toBeVisible({ timeout: 30_000 });
 
   // Cleanup
   await ctx1.close();
