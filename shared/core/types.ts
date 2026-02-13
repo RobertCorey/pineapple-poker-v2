@@ -49,7 +49,7 @@ export type ThreeCardHandRank =
   (typeof ThreeCardHandRank)[keyof typeof ThreeCardHandRank];
 
 export const GamePhase = {
-  Waiting: 'waiting',
+  Lobby: 'lobby',
   InitialDeal: 'initial_deal',
   Street2: 'street_2',
   Street3: 'street_3',
@@ -57,6 +57,7 @@ export const GamePhase = {
   Street5: 'street_5',
   Scoring: 'scoring',
   Complete: 'complete',
+  MatchComplete: 'match_complete',
 } as const;
 export type GamePhase = (typeof GamePhase)[keyof typeof GamePhase];
 
@@ -101,7 +102,6 @@ export interface PlayerState {
   currentHand: Card[];   // cards currently in hand (to be placed)
   disconnected: boolean;
   fouled: boolean;
-  sittingOut?: boolean;  // set when auto-fouled by timeout; must rejoin manually
   score: number;
 }
 
@@ -116,6 +116,9 @@ export interface GameState {
   players: Record<string, PlayerState>;
   playerOrder: string[];   // uid list for turn order
   street: number;          // 1-5
+  round: number;           // 1-based current round (0 = pre-match lobby)
+  totalRounds: number;     // rounds per match (always 3)
+  hostUid: string;         // uid of match creator
   roundResults?: Record<string, RoundResult>;
   createdAt: number;
   updatedAt: number;

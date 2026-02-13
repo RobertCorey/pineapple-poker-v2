@@ -18,6 +18,9 @@ export const STREET_PLACE_COUNT = 2;
 /** Total streets in a game. */
 export const TOTAL_STREETS = 5;
 
+/** Number of rounds per match. */
+export const ROUNDS_PER_MATCH = 3;
+
 /** Turn timeout durations in milliseconds */
 export const INITIAL_DEAL_TIMEOUT_MS = 30_000;  // 30 seconds
 export const STREET_TIMEOUT_MS = 20_000;         // 20 seconds
