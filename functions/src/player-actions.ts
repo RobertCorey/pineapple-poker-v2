@@ -9,6 +9,7 @@ import {
   TOP_ROW_SIZE,
   FIVE_CARD_ROW_SIZE,
   ROUNDS_PER_MATCH,
+  MAX_PLAYERS,
 } from '../../shared/core/constants';
 import { gameDoc, handDoc, deckDoc } from '../../shared/core/firestore-paths';
 import { emptyBoard } from '../../shared/game-logic/board-utils';
@@ -124,6 +125,10 @@ export const joinGame = onCall({ maxInstances: 10 }, async (request) => {
 
       // Already in game — no-op
       if (players[uid]) return;
+
+      if (Object.keys(players).length >= MAX_PLAYERS) {
+        throw new HttpsError('resource-exhausted', `Room is full (max ${MAX_PLAYERS} players).`);
+      }
 
       (players as Record<string, unknown>)[uid] = {
         uid,

@@ -36,7 +36,7 @@ export function DebugPanel({ gameState, currentUid }: DebugPanelProps) {
   const hostName = gameState.players[gameState.hostUid]?.displayName ?? '?';
 
   return (
-    <div className="w-72 border-l border-gray-700 bg-gray-950 p-2 text-[11px] text-gray-400 overflow-y-auto flex-shrink-0">
+    <div className="fixed top-12 right-2 w-72 max-h-[80vh] border border-gray-700 bg-gray-950/95 backdrop-blur-sm p-2 text-[11px] text-gray-400 overflow-y-auto z-40 shadow-xl rounded">
       <div className="text-xs font-bold text-gray-300 mb-2">Debug</div>
 
       <table className="w-full mb-3">

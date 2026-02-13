@@ -3,7 +3,7 @@ import { httpsCallable } from 'firebase/functions';
 import type { GameState, Card, Row, Board } from '@shared/core/types';
 import { GamePhase } from '@shared/core/types';
 import { functions } from '../firebase.ts';
-import { PlayerGrid } from './PlayerGrid.tsx';
+import { OpponentGrid, PlayerSection } from './PlayerGrid.tsx';
 import { HandPanel } from './HandPanel.tsx';
 import { RoundResults } from './RoundResults.tsx';
 import { MatchResults } from './MatchResults.tsx';
@@ -34,7 +34,7 @@ export function GamePage({ gameState, hand, uid, roomId, onLeaveRoom }: GamePage
   const [submitting, setSubmitting] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const [debugOpen, setDebugOpen] = useState(true);
+  const [debugOpen, setDebugOpen] = useState(false);
 
   // Auto-dismiss toast after 3 seconds
   useEffect(() => {
@@ -166,9 +166,9 @@ export function GamePage({ gameState, hand, uid, roomId, onLeaveRoom }: GamePage
   const isObserver = !gameState.playerOrder.includes(uid);
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white font-mono flex flex-col">
+    <div className="h-screen bg-gray-900 text-white font-mono flex flex-col overflow-hidden">
       {/* Header bar */}
-      <div className="border-b border-gray-700 px-3 py-2 flex items-center justify-between text-xs">
+      <div className="border-b border-gray-700 px-3 py-2 flex items-center justify-between text-xs flex-shrink-0">
         <span className="font-bold">Pineapple Poker</span>
         <div className="flex items-center gap-3">
           <span className="text-green-400 tracking-widest">{roomId}</span>
@@ -201,18 +201,23 @@ export function GamePage({ gameState, hand, uid, roomId, onLeaveRoom }: GamePage
 
       {/* Observer banner */}
       {isObserver && (
-        <div className="bg-blue-900 border-b border-blue-700 px-3 py-1 text-center text-xs text-blue-300">
+        <div className="bg-blue-900 border-b border-blue-700 px-3 py-1 text-center text-xs text-blue-300 flex-shrink-0">
           Observing — you can join the next match
         </div>
       )}
 
-      {/* Body: game column + debug sidebar */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Game column */}
-        <div className="flex-1 flex flex-col min-w-0">
-          {/* Main area */}
-          <div className="flex-1 p-3 overflow-auto">
-            <PlayerGrid
+      {/* Main body: vertical 50/50 split */}
+      <div className="flex-1 flex flex-col min-h-0">
+        {/* Top half: opponent grid */}
+        <div className="flex-1 min-h-0 border-b border-gray-800">
+          <OpponentGrid gameState={gameState} currentUid={uid} />
+        </div>
+
+        {/* Bottom half: player board + hand */}
+        <div className="flex-1 min-h-0 flex flex-col">
+          {/* Player board */}
+          <div className="flex-1 min-h-0 overflow-auto p-2 flex items-center justify-center">
+            <PlayerSection
               gameState={gameState}
               currentUid={uid}
               currentPlayerBoard={mergedBoard}
@@ -232,15 +237,15 @@ export function GamePage({ gameState, hand, uid, roomId, onLeaveRoom }: GamePage
             submitting={submitting}
           />
         </div>
-
-        {/* Debug sidebar */}
-        {debugOpen && (
-          <DebugPanel
-            gameState={gameState}
-            currentUid={uid}
-          />
-        )}
       </div>
+
+      {/* Debug panel overlay */}
+      {debugOpen && (
+        <DebugPanel
+          gameState={gameState}
+          currentUid={uid}
+        />
+      )}
 
       {/* Round results modal (inter-round, not final) */}
       {showResults && isRoundComplete && !isMatchComplete && (

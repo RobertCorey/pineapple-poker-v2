@@ -12,6 +12,8 @@ import {
   INITIAL_DEAL_TIMEOUT_MS,
   STREET_TIMEOUT_MS,
   INTER_ROUND_DELAY_MS,
+  TOP_ROW_SIZE,
+  FIVE_CARD_ROW_SIZE,
 } from '../../shared/core/constants';
 import { createShuffledDeck, dealCards } from '../../shared/game-logic/deck';
 import { scoreAllPlayers, isFoul } from '../../shared/game-logic/scoring';
@@ -328,8 +330,8 @@ export async function resetForNextRound(db: Firestore, roomId: string): Promise<
 }
 
 /**
- * Handle phase timeout: mark unplaced players as fouled, clear their hands,
- * then the dealer will detect the state change and advance.
+ * Auto-place cards randomly for players who haven't placed before the deadline.
+ * Cards are distributed into available board slots instead of fouling.
  */
 export async function handlePhaseTimeout(db: Firestore, roomId: string): Promise<void> {
   const gameRef = db.doc(gameDoc(roomId));
@@ -340,9 +342,10 @@ export async function handlePhaseTimeout(db: Firestore, roomId: string): Promise
 
     const game = snap.data()!;
     const phase = game.phase as string;
+    const street = game.street as number;
     const phaseDeadline = game.phaseDeadline as number | null;
 
-    // Only foul during placement phases when deadline has actually passed
+    // Only act during placement phases when deadline has actually passed
     if (
       phase !== GP.InitialDeal &&
       phase !== GP.Street2 &&
@@ -365,15 +368,37 @@ export async function handlePhaseTimeout(db: Firestore, roomId: string): Promise
       if (hand.length === 0) continue;
       if (player.fouled) continue;
 
-      // Mark as fouled, clear hand and board
+      const board = player.board as Board;
+      const newBoard: Board = {
+        top: [...board.top],
+        middle: [...board.middle],
+        bottom: [...board.bottom],
+      };
+
+      // Shuffle hand for random placement
+      const shuffled = [...hand];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+
+      if (street === 1) {
+        // Initial deal: place all 5 cards into free slots
+        autoPlaceCards(shuffled, newBoard, 5);
+      } else {
+        // Streets 2-5: place 2, discard 1
+        autoPlaceCards(shuffled, newBoard, 2);
+        // 3rd card is discarded (just don't place it)
+      }
+
       players[uid] = {
         ...player,
-        fouled: true,
+        board: newBoard,
         currentHand: [],
-        board: emptyBoard(),
       };
       tx.set(db.doc(handDoc(uid, roomId)), { cards: [] });
       changed = true;
+      console.log(`[Dealer] [${roomId}] Auto-placed cards for ${player.displayName || uid}`);
     }
 
     if (changed) {
@@ -385,6 +410,23 @@ export async function handlePhaseTimeout(db: Firestore, roomId: string): Promise
       });
     }
   });
+}
+
+/** Place N cards from hand into available board slots (bottom → middle → top). */
+function autoPlaceCards(cards: Card[], board: Board, count: number): void {
+  let placed = 0;
+  const rows: Array<{ name: keyof Board; max: number }> = [
+    { name: 'bottom', max: FIVE_CARD_ROW_SIZE },
+    { name: 'middle', max: FIVE_CARD_ROW_SIZE },
+    { name: 'top', max: TOP_ROW_SIZE },
+  ];
+
+  for (const { name, max } of rows) {
+    while (placed < count && board[name].length < max) {
+      board[name].push(cards[placed]);
+      placed++;
+    }
+  }
 }
 
 /**
