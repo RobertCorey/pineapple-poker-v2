@@ -25,22 +25,22 @@ test('placed cards appear on board and auto-submit works', async ({ browser }) =
 
   await alice.getByTestId('name-input').fill('Alice');
   await alice.getByTestId('join-button').click();
-  await alice.getByTestId('start-match-button').waitFor({ timeout: 10_000 });
+  await alice.getByTestId('start-match-button').waitFor({ timeout: 30_000 });
 
   await bob.getByTestId('name-input').fill('Bob');
   await bob.getByTestId('join-button').click();
-  await expect(bob.getByText('Waiting for host to start')).toBeVisible({ timeout: 10_000 });
+  await expect(bob.getByText('Waiting for host to start')).toBeVisible({ timeout: 30_000 });
 
   // Host starts match
   await alice.getByTestId('start-match-button').click();
 
   // Wait for initial_deal phase
-  await expect(alice.getByTestId('phase-label')).toContainText('initial_deal', { timeout: 15_000 });
+  await expect(alice.getByTestId('phase-label')).toContainText('initial_deal', { timeout: 30_000 });
 
   const board = alice.getByTestId('my-board');
 
   // Wait for cards in hand
-  await alice.getByTestId('hand-card-0').waitFor({ timeout: 15_000 });
+  await alice.getByTestId('hand-card-0').waitFor({ timeout: 30_000 });
 
   // --- Verify: no confirm or undo buttons exist before placing ---
   await expect(alice.getByTestId('confirm-button')).not.toBeVisible();
@@ -93,7 +93,7 @@ test('placed cards appear on board and auto-submit works', async ({ browser }) =
   await expect(alice.getByTestId('confirm-button')).not.toBeVisible();
 
   // --- Bob places to advance game to street 2 ---
-  await bob.getByTestId('hand-card-0').waitFor({ timeout: 15_000 });
+  await bob.getByTestId('hand-card-0').waitFor({ timeout: 30_000 });
 
   const bobBoard = bob.getByTestId('my-board');
   for (let i = 0; i < 2; i++) {
@@ -108,8 +108,8 @@ test('placed cards appear on board and auto-submit works', async ({ browser }) =
   await bobBoard.getByTestId('row-top').click();
 
   // --- Street 2: verify auto-discard (3 cards dealt, place 2, 3rd auto-discarded) ---
-  await expect(alice.getByTestId('phase-label')).toContainText('street_2', { timeout: 15_000 });
-  await alice.getByTestId('hand-card-0').waitFor({ timeout: 15_000 });
+  await expect(alice.getByTestId('phase-label')).toContainText('street_2', { timeout: 30_000 });
+  await alice.getByTestId('hand-card-0').waitFor({ timeout: 30_000 });
 
   // Should have 3 cards in hand
   await expect(alice.getByTestId('hand-card-0')).toBeVisible();

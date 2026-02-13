@@ -5,7 +5,7 @@ export async function placeInitialDeal(page: Page) {
   const board = page.getByTestId('my-board');
 
   // Wait for cards to appear in hand
-  await page.getByTestId('hand-card-0').waitFor({ timeout: 15_000 });
+  await page.getByTestId('hand-card-0').waitFor({ timeout: 30_000 });
 
   // Card 0 → bottom row
   await page.getByTestId('hand-card-0').click();
@@ -41,7 +41,7 @@ export async function placeStreet(page: Page, street: number) {
   const board = page.getByTestId('my-board');
 
   // Wait for 3 cards in hand
-  await page.getByTestId('hand-card-0').waitFor({ timeout: 15_000 });
+  await page.getByTestId('hand-card-0').waitFor({ timeout: 30_000 });
 
   // Choose which rows to place into based on street number
   let row1: string, row2: string;

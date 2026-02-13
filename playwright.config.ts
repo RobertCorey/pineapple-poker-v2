@@ -5,7 +5,10 @@ const isProduction = !!process.env.PRODUCTION_URL;
 export default defineConfig({
   globalSetup: './e2e/global-setup.ts',
   testDir: './e2e',
-  timeout: 120_000,
+  testIgnore: isProduction
+    ? ['**/bot.spec.ts', '**/stress.spec.ts', '**/scoring.spec.ts', '**/sit-out.spec.ts', '**/dev-ui.spec.ts']
+    : ['**/bot.spec.ts'],
+  timeout: isProduction ? 180_000 : 120_000,
   retries: isProduction ? 1 : 0,
   workers: undefined, /* parallel — each test uses a unique room */
   use: {

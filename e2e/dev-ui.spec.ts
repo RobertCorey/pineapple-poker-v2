@@ -37,8 +37,8 @@ test('dev UI features render correctly', async ({ browser }) => {
   // --- Debug panel should be visible by default ---
   await expect(alice.getByText('Debug')).toBeVisible();
 
-  // Debug panel should contain game state info
-  await expect(alice.getByText('initial_deal')).toBeVisible();
+  // Debug panel should contain game state info (use first() since phase-label also shows it)
+  await expect(alice.getByText('initial_deal').first()).toBeVisible();
   await expect(alice.getByText('Alice')).toBeVisible();
   await expect(alice.getByText('Bob')).toBeVisible();
 
