@@ -5,7 +5,9 @@ import * as path from 'path';
 import { Dealer } from './dealer';
 import { DEALER_HEALTH_PORT } from '../../shared/core/constants';
 
-// ── Lockfile self-guard ─────────────────────────────────────────────────────
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+
+// ── Lockfile self-guard (dev only — systemd handles single-instance in prod) ─
 
 const LOCK_FILE = path.resolve(__dirname, '../../.dealer.lock');
 
@@ -71,13 +73,14 @@ function removeLockfile(): void {
 
 // ── Start ───────────────────────────────────────────────────────────────────
 
-killOldDealer();
-writeLockfile();
+if (!IS_PRODUCTION) {
+  killOldDealer();
+  writeLockfile();
+  process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:8080';
+}
 
-// Point at Firestore emulator
-process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:8080';
-
-admin.initializeApp({ projectId: 'pineapple-poker-8f3' });
+// In production, initializeApp() with no args uses Application Default Credentials
+admin.initializeApp(IS_PRODUCTION ? undefined : { projectId: 'pineapple-poker-8f3' });
 
 const db = admin.firestore();
 const dealer = new Dealer(db);
@@ -85,6 +88,10 @@ const dealer = new Dealer(db);
 // ── Health HTTP server ──────────────────────────────────────────────────────
 
 const startTime = Date.now();
+const healthPort = IS_PRODUCTION
+  ? parseInt(process.env.PORT || String(DEALER_HEALTH_PORT), 10)
+  : DEALER_HEALTH_PORT;
+const healthHost = IS_PRODUCTION ? '0.0.0.0' : '127.0.0.1';
 
 const healthServer = http.createServer((req, res) => {
   if (req.url === '/health' && req.method === 'GET') {
@@ -101,13 +108,14 @@ const healthServer = http.createServer((req, res) => {
   }
 });
 
-healthServer.listen(DEALER_HEALTH_PORT, '127.0.0.1', () => {
-  console.log(`[Dealer] Health endpoint: http://127.0.0.1:${DEALER_HEALTH_PORT}/health`);
+healthServer.listen(healthPort, healthHost, () => {
+  console.log(`[Dealer] Health endpoint: http://${healthHost}:${healthPort}/health`);
 });
 
 // ── Start dealer ────────────────────────────────────────────────────────────
 
 dealer.start();
+console.log(`[Dealer] Running in ${IS_PRODUCTION ? 'PRODUCTION' : 'development'} mode`);
 
 // ── Graceful shutdown ───────────────────────────────────────────────────────
 
@@ -115,7 +123,7 @@ function shutdown(): void {
   console.log('\n[Dealer] Shutting down...');
   dealer.stop();
   healthServer.close();
-  removeLockfile();
+  if (!IS_PRODUCTION) removeLockfile();
   process.exit(0);
 }
 
