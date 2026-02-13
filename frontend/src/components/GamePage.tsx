@@ -86,7 +86,13 @@ export function GamePage({ gameState, hand, uid, roomId, onLeaveRoom }: GamePage
       bottom: [...player.board.bottom],
     };
     for (const p of placements) {
-      board[p.row] = [...board[p.row], p.card];
+      // Skip if this card already exists on the Firestore board (dedup across listeners)
+      const alreadyOnBoard = board[p.row].some(
+        (c) => c.rank === p.card.rank && c.suit === p.card.suit
+      );
+      if (!alreadyOnBoard) {
+        board[p.row] = [...board[p.row], p.card];
+      }
     }
     return board;
   }, [gameState.players, uid, placements]);
@@ -122,6 +128,9 @@ export function GamePage({ gameState, hand, uid, roomId, onLeaveRoom }: GamePage
 
         const placeCardsFn = httpsCallable(functions, 'placeCards');
         await placeCardsFn({ roomId, placements: placementData, discard });
+        // Don't clear placements here — they persist until the phase-change
+        // cleanup (line 70-74). The dedup logic in mergedBoard ensures no
+        // double-counting once the Firestore board snapshot arrives.
       } catch (err) {
         console.error('Failed to place cards:', err);
         setToast('Failed to place cards — try again');
