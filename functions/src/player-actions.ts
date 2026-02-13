@@ -1,5 +1,6 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
+import { FieldValue } from 'firebase-admin/firestore';
 import type { Card, Board, Row, GamePhase } from '../../shared/core/types';
 import { GamePhase as GP } from '../../shared/core/types';
 import {
@@ -7,16 +8,25 @@ import {
   STREET_PLACE_COUNT,
   TOP_ROW_SIZE,
   FIVE_CARD_ROW_SIZE,
+  ROUNDS_PER_MATCH,
 } from '../../shared/core/constants';
-import { GAME_DOC, handDoc, deckDoc } from '../../shared/core/firestore-paths';
+import { gameDoc, handDoc, deckDoc } from '../../shared/core/firestore-paths';
 import { emptyBoard } from '../../shared/game-logic/board-utils';
 
 const db = () => admin.firestore();
 
+function extractRoomId(data: Record<string, unknown> | undefined): string {
+  const roomId = data?.roomId as string;
+  if (!roomId) {
+    throw new HttpsError('invalid-argument', 'Must provide roomId.');
+  }
+  return roomId;
+}
+
 // ---- removePlayer (inlined from former game-manager.ts) ----
 
-async function removePlayer(uid: string): Promise<void> {
-  const gameRef = db().doc(GAME_DOC);
+async function removePlayer(uid: string, roomId: string): Promise<void> {
+  const gameRef = db().doc(gameDoc(roomId));
 
   await db().runTransaction(async (tx) => {
     const snap = await tx.get(gameRef);
@@ -25,6 +35,7 @@ async function removePlayer(uid: string): Promise<void> {
     const game = snap.data()!;
     const players = game.players as Record<string, Record<string, unknown>>;
     const playerOrder = game.playerOrder as string[];
+    const hostUid = game.hostUid as string;
 
     if (!players[uid]) return;
 
@@ -35,8 +46,8 @@ async function removePlayer(uid: string): Promise<void> {
     const newPlayerOrder = playerOrder.filter((u) => u !== uid);
 
     // Clean up subcollection docs
-    tx.delete(db().doc(handDoc(uid)));
-    tx.delete(db().doc(deckDoc(uid)));
+    tx.delete(db().doc(handDoc(uid, roomId)));
+    tx.delete(db().doc(deckDoc(uid, roomId)));
 
     // If no players remain, delete the game
     if (Object.keys(players).length === 0) {
@@ -44,11 +55,17 @@ async function removePlayer(uid: string): Promise<void> {
       return;
     }
 
-    tx.update(gameRef, {
+    // If leaving player is host, promote next player in playerOrder
+    const updates: { players: typeof players; playerOrder: string[]; updatedAt: number; hostUid?: string } = {
       players,
       playerOrder: newPlayerOrder,
       updatedAt: Date.now(),
-    });
+    };
+    if (uid === hostUid && newPlayerOrder.length > 0) {
+      updates.hostUid = newPlayerOrder[0];
+    }
+
+    tx.update(gameRef, updates);
   });
 }
 
@@ -60,15 +77,21 @@ export const joinGame = onCall(async (request) => {
     throw new HttpsError('unauthenticated', 'Must be signed in to join.');
   }
 
+  const roomId = extractRoomId(request.data as Record<string, unknown>);
   const displayName = (request.data?.displayName as string) || `Player_${uid.slice(0, 6)}`;
-  const gameRef = db().doc(GAME_DOC);
+  const create = !!(request.data as Record<string, unknown>)?.create;
+  const gameRef = db().doc(gameDoc(roomId));
 
   await db().runTransaction(async (tx) => {
     const snap = await tx.get(gameRef);
     const now = Date.now();
 
     if (!snap.exists) {
-      // Create fresh game document with just this player
+      if (!create) {
+        throw new HttpsError('not-found', 'Room not found.');
+      }
+
+      // Create fresh game document — this player becomes host
       const players: Record<string, unknown> = {};
       players[uid] = {
         uid,
@@ -81,11 +104,14 @@ export const joinGame = onCall(async (request) => {
       };
 
       tx.set(gameRef, {
-        gameId: 'current',
-        phase: GP.Waiting,
+        gameId: roomId,
+        phase: GP.Lobby,
         players,
         playerOrder: [uid],
         street: 0,
+        round: 0,
+        totalRounds: ROUNDS_PER_MATCH,
+        hostUid: uid,
         createdAt: now,
         updatedAt: now,
         phaseDeadline: null,
@@ -94,40 +120,10 @@ export const joinGame = onCall(async (request) => {
       const game = snap.data()!;
       const players = game.players as Record<string, Record<string, unknown>>;
       const playerOrder = game.playerOrder as string[];
-      const isWaiting = game.phase === GP.Waiting;
+      const phase = game.phase as string;
 
-      // Already in game — handle rejoin from sitting out
-      if (players[uid]) {
-        const player = players[uid];
-        if (player.sittingOut) {
-          // Clear sitting out, reset state
-          players[uid] = {
-            ...player,
-            sittingOut: false,
-            board: emptyBoard(),
-            currentHand: [],
-            fouled: false,
-            score: 0,
-          };
-
-          if (isWaiting) {
-            // Add back to playerOrder immediately
-            playerOrder.push(uid);
-            tx.update(gameRef, {
-              players,
-              playerOrder,
-              updatedAt: now,
-            });
-          } else {
-            // Mid-round: stay as observer, auto-promoted next round
-            tx.update(gameRef, {
-              players,
-              updatedAt: now,
-            });
-          }
-        }
-        return;
-      }
+      // Already in game — no-op
+      if (players[uid]) return;
 
       (players as Record<string, unknown>)[uid] = {
         uid,
@@ -139,7 +135,7 @@ export const joinGame = onCall(async (request) => {
         score: 0,
       };
 
-      if (isWaiting) {
+      if (phase === GP.Lobby || phase === GP.MatchComplete) {
         // Join as active player
         playerOrder.push(uid);
         tx.update(gameRef, {
@@ -148,7 +144,7 @@ export const joinGame = onCall(async (request) => {
           updatedAt: now,
         });
       } else {
-        // Join as observer (not added to playerOrder)
+        // Match in progress — join as observer only
         tx.update(gameRef, {
           players,
           updatedAt: now,
@@ -170,7 +166,8 @@ export const leaveGame = onCall(async (request) => {
     throw new HttpsError('unauthenticated', 'Must be signed in.');
   }
 
-  await removePlayer(uid);
+  const roomId = extractRoomId(request.data as Record<string, unknown>);
+  await removePlayer(uid, roomId);
 
   // Dealer will detect the state change via onSnapshot and advance if needed
 
@@ -180,6 +177,7 @@ export const leaveGame = onCall(async (request) => {
 // ---- placeCards ----
 
 interface PlaceCardsData {
+  roomId: string;
   placements: Array<{ card: Card; row: Row }>;
   discard?: Card;
 }
@@ -191,11 +189,13 @@ export const placeCards = onCall(async (request) => {
   }
 
   const data = request.data as PlaceCardsData;
+  const roomId = extractRoomId(data as unknown as Record<string, unknown>);
+
   if (!data?.placements || !Array.isArray(data.placements)) {
     throw new HttpsError('invalid-argument', 'Must provide placements array.');
   }
 
-  const gameRef = db().doc(GAME_DOC);
+  const gameRef = db().doc(gameDoc(roomId));
 
   await db().runTransaction(async (tx) => {
     const snap = await tx.get(gameRef);
@@ -309,10 +309,112 @@ export const placeCards = onCall(async (request) => {
     });
 
     // Clear hand doc
-    tx.set(db().doc(handDoc(uid)), { cards: [] });
+    tx.set(db().doc(handDoc(uid, roomId)), { cards: [] });
   });
 
   // Dealer will detect the state change via onSnapshot and advance if all have placed
+
+  return { success: true };
+});
+
+// ---- startMatch ----
+
+export const startMatch = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError('unauthenticated', 'Must be signed in.');
+  }
+
+  const roomId = extractRoomId(request.data as Record<string, unknown>);
+  const gameRef = db().doc(gameDoc(roomId));
+
+  await db().runTransaction(async (tx) => {
+    const snap = await tx.get(gameRef);
+    if (!snap.exists) {
+      throw new HttpsError('not-found', 'No game exists.');
+    }
+
+    const game = snap.data()!;
+
+    if (game.hostUid !== uid) {
+      throw new HttpsError('permission-denied', 'Only the host can start the match.');
+    }
+    if (game.phase !== GP.Lobby) {
+      throw new HttpsError('failed-precondition', 'Game is not in lobby phase.');
+    }
+    if ((game.round as number) !== 0) {
+      throw new HttpsError('failed-precondition', 'Match has already been started.');
+    }
+
+    const playerOrder = game.playerOrder as string[];
+    if (playerOrder.length < 2) {
+      throw new HttpsError('failed-precondition', 'Need at least 2 players to start.');
+    }
+
+    // Set round to 1 — dealer will pick up the snapshot and call maybeStartRound
+    tx.update(gameRef, {
+      round: 1,
+      updatedAt: Date.now(),
+    });
+  });
+
+  return { success: true };
+});
+
+// ---- playAgain ----
+
+export const playAgain = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError('unauthenticated', 'Must be signed in.');
+  }
+
+  const roomId = extractRoomId(request.data as Record<string, unknown>);
+  const gameRef = db().doc(gameDoc(roomId));
+
+  await db().runTransaction(async (tx) => {
+    const snap = await tx.get(gameRef);
+    if (!snap.exists) {
+      throw new HttpsError('not-found', 'No game exists.');
+    }
+
+    const game = snap.data()!;
+
+    if (game.hostUid !== uid) {
+      throw new HttpsError('permission-denied', 'Only the host can restart.');
+    }
+    if (game.phase !== GP.MatchComplete) {
+      throw new HttpsError('failed-precondition', 'Match is not complete.');
+    }
+
+    const players = game.players as Record<string, Record<string, unknown>>;
+
+    // Reset all players: scores to 0, boards/hands cleared
+    const updatedPlayers: Record<string, unknown> = {};
+    const updatedPlayerOrder: string[] = [];
+
+    for (const pUid of Object.keys(players)) {
+      updatedPlayers[pUid] = {
+        ...players[pUid],
+        board: emptyBoard(),
+        currentHand: [],
+        fouled: false,
+        score: 0,
+      };
+      updatedPlayerOrder.push(pUid);
+    }
+
+    tx.update(gameRef, {
+      phase: GP.Lobby,
+      round: 0,
+      street: 0,
+      players: updatedPlayers,
+      playerOrder: updatedPlayerOrder,
+      roundResults: FieldValue.delete(),
+      phaseDeadline: null,
+      updatedAt: Date.now(),
+    });
+  });
 
   return { success: true };
 });
