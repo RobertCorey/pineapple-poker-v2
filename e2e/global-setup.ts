@@ -7,6 +7,7 @@ export default async function globalSetup() {
     { name: 'Functions emulator', url: 'http://localhost:5001', anyStatus: true },
     { name: 'Emulator UI', url: 'http://localhost:4000' },
     { name: 'Vite dev server', url: 'http://localhost:5173' },
+    { name: 'Dealer service', url: 'http://localhost:5555/health' },
   ];
 
   const failures: string[] = [];

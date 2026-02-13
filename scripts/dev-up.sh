@@ -18,7 +18,7 @@ for arg in "$@"; do
   esac
 done
 
-PORTS=(8080 5001 9099 4000 5000 5173)
+PORTS=(8080 5001 9099 4000 5000 5173 5555)
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -70,14 +70,7 @@ wait_for_http_any() {
 wait_for_dealer() {
   local timeout=$1
   local elapsed=0
-  while true; do
-    if [ -f "$PIDS_DIR/dealer.pid" ] && kill -0 "$(cat "$PIDS_DIR/dealer.pid")" 2>/dev/null; then
-      echo "  Dealer ready (${elapsed}s)"
-      return 0
-    elif pgrep -f "tsx.*dealer/src" > /dev/null 2>&1; then
-      echo "  Dealer ready (${elapsed}s)"
-      return 0
-    fi
+  while ! curl -sf "http://localhost:5555/health" > /dev/null 2>&1; do
     if [ "$elapsed" -ge "$timeout" ]; then
       echo "  TIMEOUT waiting for Dealer after ${timeout}s"
       return 1
@@ -85,6 +78,8 @@ wait_for_dealer() {
     sleep 1
     elapsed=$((elapsed + 1))
   done
+  echo "  Dealer ready (${elapsed}s)"
+  return 0
 }
 
 # ── Step 1: Kill stale processes on known ports ──────────────────────────────
@@ -93,12 +88,8 @@ echo "Cleaning stale processes..."
 for port in "${PORTS[@]}"; do
   kill_port "$port"
 done
-# Kill stale dealer processes (no port to detect)
-dealer_pids=$(pgrep -f "tsx.*dealer/src" 2>/dev/null || true)
-if [ -n "$dealer_pids" ]; then
-  echo "  Killing stale dealer processes"
-  echo "$dealer_pids" | xargs kill 2>/dev/null || true
-fi
+# Port 5555 cleanup handles stale dealer (via health endpoint port)
+# The dealer's lockfile self-guard also prevents duplicates on startup
 
 # ── Step 2: Clean old PID files ──────────────────────────────────────────────
 

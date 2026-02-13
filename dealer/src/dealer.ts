@@ -32,6 +32,8 @@ export class Dealer {
     this.db = db;
   }
 
+  get roomCount(): number { return this.rooms.size; }
+
   start(): void {
     console.log('[Dealer] Starting — listening to games collection');
     this.unsubscribe = this.db.collection('games').onSnapshot(

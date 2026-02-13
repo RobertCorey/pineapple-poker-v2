@@ -28,6 +28,9 @@ export const STREET_TIMEOUT_MS = 20_000;         // 20 seconds
 /** Delay between rounds before auto-starting next */
 export const INTER_ROUND_DELAY_MS = 5_000;       // 5 seconds
 
+/** Dealer health endpoint port (localhost only) */
+export const DEALER_HEALTH_PORT = 5555;
+
 /** Top row size. */
 export const TOP_ROW_SIZE = 3;
 

@@ -4,7 +4,8 @@ set -euo pipefail
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
 PIDS_DIR="$DIR/.pids"
 SESSION="pineapple"
-PORTS=(8080 5001 9099 4000 5000 5173)
+LOCK_FILE="$DIR/.dealer.lock"
+PORTS=(8080 5001 9099 4000 5000 5173 5555)
 
 echo "Stopping dev services..."
 
@@ -43,12 +44,30 @@ if [ -d "$PIDS_DIR" ]; then
   rm -rf "$PIDS_DIR"
 fi
 
-# ── Layer 3: Kill known process patterns (no port to sweep) ──────────────────
+# ── Layer 3: Kill dealer via health endpoint + lockfile ──────────────────────
 
+# Try health endpoint first for authoritative PID
+dealer_pid=$(curl -sf "http://localhost:5555/health" 2>/dev/null | grep -o '"pid":[0-9]*' | grep -o '[0-9]*' || true)
+if [ -n "$dealer_pid" ] && kill -0 "$dealer_pid" 2>/dev/null; then
+  kill "$dealer_pid" 2>/dev/null || true
+  echo "  Killed dealer via health endpoint (PID $dealer_pid)"
+fi
+
+# Backup: read lockfile
+if [ -f "$LOCK_FILE" ]; then
+  lock_pid=$(cat "$LOCK_FILE" 2>/dev/null || true)
+  if [ -n "$lock_pid" ] && kill -0 "$lock_pid" 2>/dev/null; then
+    kill "$lock_pid" 2>/dev/null || true
+    echo "  Killed dealer via lockfile (PID $lock_pid)"
+  fi
+  rm -f "$LOCK_FILE"
+fi
+
+# Final fallback: pgrep
 dealer_pids=$(pgrep -f "tsx.*dealer/src" 2>/dev/null || true)
 if [ -n "$dealer_pids" ]; then
   echo "$dealer_pids" | xargs kill 2>/dev/null || true
-  echo "  Killed dealer processes"
+  echo "  Killed dealer processes (pgrep fallback)"
 fi
 
 # ── Layer 4: Port sweep fallback ─────────────────────────────────────────────

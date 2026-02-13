@@ -2,9 +2,6 @@
 # Check that all services required for E2E tests are running.
 # Usage: ./scripts/check-services.sh [--wait [TIMEOUT]]
 
-DIR="$(cd "$(dirname "$0")/.." && pwd)"
-PIDS_DIR="$DIR/.pids"
-
 WAIT_MODE=false
 TIMEOUT=60
 
@@ -28,18 +25,9 @@ check_url() {
 }
 
 check_http_any() {
-  # curl -w writes the HTTP code to stdout even on failure (outputs "000").
-  # We must NOT use `|| echo "000"` because that appends a second "000" on failure.
   local code
   code=$(curl -s -o /dev/null -w "%{http_code}" "$1" 2>/dev/null)
   [ "$code" != "000" ] && [ -n "$code" ]
-}
-
-check_dealer() {
-  if [ -f "$PIDS_DIR/dealer.pid" ] && kill -0 "$(cat "$PIDS_DIR/dealer.pid")" 2>/dev/null; then
-    return 0
-  fi
-  pgrep -f "tsx.*dealer/src" > /dev/null 2>&1
 }
 
 run_checks() {
@@ -73,10 +61,10 @@ run_checks() {
     all_ok=false
   fi
 
-  if check_dealer; then
-    echo "  Dealer                ✓"
+  if check_url "http://localhost:5555/health"; then
+    echo "  Dealer      (5555)    ✓"
   else
-    echo "  Dealer                ✗  → npm run dealer"
+    echo "  Dealer      (5555)    ✗  → npm run dealer"
     all_ok=false
   fi
 
