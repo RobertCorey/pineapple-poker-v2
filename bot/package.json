@@ -1,0 +1,19 @@
+{
+  "name": "pineapple-bot",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "build": "tsc"
+  },
+  "engines": {
+    "node": "22"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.0.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0",
+    "typescript": "~5.7.0"
+  }
+}

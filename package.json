@@ -4,7 +4,8 @@
   "workspaces": [
     "frontend",
     "functions",
-    "dealer"
+    "dealer",
+    "bot"
   ],
   "scripts": {
     "dev": "npm run dev -w frontend",
@@ -12,6 +13,7 @@
     "lint": "npm run lint -w frontend",
     "dealer": "npm run dev -w dealer",
     "dealer:build": "npm run build -w dealer",
+    "bot": "tsx bot/src/index.ts",
     "functions:watch": "npm run build:watch -w functions",
     "dev:up": "./scripts/dev-up.sh",
     "dev:up:bg": "./scripts/dev-up.sh --bg",
