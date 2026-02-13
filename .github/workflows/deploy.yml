@@ -61,13 +61,21 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H ${{ secrets.GCE_VM_IP }} >> ~/.ssh/known_hosts 2>/dev/null
 
+      - name: Create workspace stubs
+        run: |
+          mkdir -p /tmp/deploy-staging
+          cp -r dealer/ shared/ package.json package-lock.json /tmp/deploy-staging/
+          mkdir -p /tmp/deploy-staging/frontend /tmp/deploy-staging/functions
+          cp frontend/package.json /tmp/deploy-staging/frontend/package.json
+          cp functions/package.json /tmp/deploy-staging/functions/package.json
+
       - name: Deploy to VM
         env:
           VM_IP: ${{ secrets.GCE_VM_IP }}
         run: |
           rsync -az --delete \
             -e "ssh -i ~/.ssh/deploy_key" \
-            dealer/ shared/ package.json package-lock.json \
+            /tmp/deploy-staging/ \
             deploy@${VM_IP}:/opt/pineapple/
 
       - name: Install dependencies on VM
