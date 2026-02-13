@@ -1,13 +1,15 @@
 import { defineConfig } from '@playwright/test';
 
+const isProduction = !!process.env.PRODUCTION_URL;
+
 export default defineConfig({
   globalSetup: './e2e/global-setup.ts',
   testDir: './e2e',
   timeout: 120_000,
-  retries: 0,
+  retries: isProduction ? 1 : 0,
   workers: undefined, /* parallel — each test uses a unique room */
   use: {
-    baseURL: 'http://localhost:5173',
+    baseURL: process.env.PRODUCTION_URL || 'http://localhost:5173',
     headless: true,
     viewport: { width: 1280, height: 900 },
   },
