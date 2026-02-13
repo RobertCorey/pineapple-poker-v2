@@ -71,7 +71,7 @@ npm run dealer
 npm test                           # Playwright E2E tests
 ```
 
-E2E tests are in `e2e/`. They automatically clear emulator data between runs.
+E2E tests are in `e2e/`. Each test generates a unique room code for isolation — no shared state between tests.
 
 ### All dealer tests
 
@@ -120,33 +120,39 @@ The `shared/` directory is imported by all three: frontend uses `@shared` alias 
 
 ### Firestore data model
 
-Single game at `games/current` with subcollections:
-- `games/current` — public GameState (phase, players, boards, street, roundResults)
-- `games/current/hands/{uid}` — private hand (only readable by owning player)
-- `games/current/decks/{uid}` — server-only remaining deck (no client access)
+Each game room is a document at `games/{roomId}` with subcollections:
+- `games/{roomId}` — public GameState (phase, players, boards, street, roundResults)
+- `games/{roomId}/hands/{uid}` — private hand (only readable by owning player)
+- `games/{roomId}/decks/{uid}` — server-only remaining deck (no client access)
+
+Room IDs are 6-char alphanumeric codes (no ambiguous chars I/O/0/1). Multiple games run concurrently in separate rooms.
 
 ### Game flow
 
 **Cloud Functions** (write-only endpoints in `functions/src/`):
-1. **joinGame** — creates game or adds player
+All functions require `roomId` in request data.
+1. **joinGame** — creates room (if `create: true`) or adds player to existing room
 2. **leaveGame** — removes player entirely
 3. **placeCards** — validates & applies card placements
+4. **startMatch** — host starts the match
+5. **playAgain** — host restarts after match complete
 
 **Dealer service** (`dealer/src/`) — sole authority for all game state transitions:
-- Listens to `games/current` via `onSnapshot`
+- Listens to entire `games` collection via `onSnapshot` (collection listener)
+- Maintains per-room state Map with independent timers per room
 - Starts rounds when >=2 players in Waiting
 - Advances streets when all players have placed
 - Handles timeouts with precise `setTimeout` (auto-fouls at exact deadline)
 - Scores rounds and resets for next round
 - Recovers from any state on restart (stateless — all state from Firestore)
 
-Game engine in `dealer/src/game-engine.ts`:
-- `maybeStartRound()` — shuffle decks, deal initial 5 (requires >=2 players)
-- `advanceStreet()` — deal 3 cards per non-fouled player, advance phase
-- `scoreRound()` — evaluate hands, pairwise scoring, fouls
-- `resetForNextRound()` — promote observers, reset state
-- `handlePhaseTimeout()` — auto-foul players who haven't placed
-- `checkAndAdvance()` — check all placed and advance (recursive for all-fouled cases)
+Game engine in `dealer/src/game-engine.ts` — all functions take `(db, roomId)`:
+- `maybeStartRound(db, roomId)` — shuffle decks, deal initial 5 (requires >=2 players)
+- `advanceStreet(db, roomId)` — deal 3 cards per non-fouled player, advance phase
+- `scoreRound(db, roomId)` — evaluate hands, pairwise scoring, fouls
+- `resetForNextRound(db, roomId)` — promote observers, reset state
+- `handlePhaseTimeout(db, roomId)` — auto-foul players who haven't placed
+- `checkAndAdvance(db, roomId)` — check all placed and advance (recursive for all-fouled cases)
 
 Phases: `waiting` → `initial_deal` → `street_2` → `street_3` → `street_4` → `street_5` → `scoring` → `complete`
 
@@ -167,11 +173,13 @@ Players who join mid-round become observers (added to `players` but NOT `playerO
 
 ### Frontend patterns
 
-- State comes from real-time Firestore listeners via hooks (`useGameState`, `usePlayerHand`, `useAuth`)
+- URL-based room routing: `/?room=ABCD12` query param, no routing library
+- `RoomSelector` → Create Room / Join Room → `Lobby` → `GamePage`
+- State comes from real-time Firestore listeners via hooks (`useGameState(roomId)`, `usePlayerHand(uid, roomId)`, `useAuth`)
 - No global state management — hooks + component state only
-- `App.tsx` routes between `Lobby` (not joined) and `GamePage` (in game)
+- `App.tsx` manages `roomId` URL state, routes between `RoomSelector` / `Lobby` / `GamePage`
 - Card placement UI state (selections, placements, discards) lives in `GamePage` component state
-- Cloud Functions called via `httpsCallable` from firebase/functions SDK
+- Cloud Functions called via `httpsCallable` from firebase/functions SDK — all include `roomId`
 - Frontend imports shared code via `@shared/` alias (e.g., `import type { Card } from '@shared/core/types'`)
 - Dev-mode minimal UI: monospace font, minimal styling, raw phase/street display
 

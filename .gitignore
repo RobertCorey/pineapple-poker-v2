@@ -41,6 +41,10 @@ dealer/lib
 .playwright-mcp/
 test-results/
 
+# Dev service management
+.pids/
+.logs/
+
 # Personal notes
 notes.txt
 notes/

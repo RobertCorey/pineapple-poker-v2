@@ -20,7 +20,14 @@
       "Bash(npm run dealer:build:*)",
       "Bash(npx vite build:*)",
       "Bash(./scripts/check-services.sh:*)",
-      "Bash(npx playwright test:*)"
+      "Bash(npx playwright test:*)",
+      "Bash(du -sh:*)",
+      "Bash(wc:*)",
+      "Bash(find:*)",
+      "Bash(done)",
+      "Bash(ls:*)",
+      "Bash(npm ls:*)",
+      "Bash(grep:*)"
     ]
   }
 }
