@@ -113,6 +113,19 @@ export async function advanceStreet(db: Firestore): Promise<'scoring' | 'advance
     if (!snap.exists) return 'noop';
 
     const game = snap.data()!;
+    const phase = game.phase as string;
+
+    // Only advance during placement phases
+    if (
+      phase !== GP.InitialDeal &&
+      phase !== GP.Street2 &&
+      phase !== GP.Street3 &&
+      phase !== GP.Street4 &&
+      phase !== GP.Street5
+    ) {
+      return 'noop';
+    }
+
     const currentStreet = game.street as number;
     const players = game.players as Record<string, Record<string, unknown>>;
     const uids = game.playerOrder as string[];
