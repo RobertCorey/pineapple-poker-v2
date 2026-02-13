@@ -7,6 +7,7 @@ import { PlayerGrid } from './PlayerGrid.tsx';
 import { HandPanel } from './HandPanel.tsx';
 import { RoundResults } from './RoundResults.tsx';
 import { MatchResults } from './MatchResults.tsx';
+import { DebugPanel } from './DebugPanel.tsx';
 import { useCountdown } from '../hooks/useCountdown.ts';
 
 function cardKey(c: Card): string {
@@ -33,6 +34,7 @@ export function GamePage({ gameState, hand, uid, roomId, onLeaveRoom }: GamePage
   const [submitting, setSubmitting] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [debugOpen, setDebugOpen] = useState(true);
 
   // Auto-dismiss toast after 3 seconds
   useEffect(() => {
@@ -178,6 +180,12 @@ export function GamePage({ gameState, hand, uid, roomId, onLeaveRoom }: GamePage
             {gameState.playerOrder.length} playing, {Object.keys(gameState.players).length} total
           </span>
           <button
+            onClick={() => setDebugOpen((o) => !o)}
+            className={`px-2 py-1 text-xs border ${debugOpen ? 'bg-yellow-900 border-yellow-700 text-yellow-300' : 'bg-gray-800 border-gray-600 text-gray-400'}`}
+          >
+            [DBG]
+          </button>
+          <button
             onClick={handleLeave}
             disabled={leaving}
             className="px-2 py-1 bg-red-800 hover:bg-red-700 disabled:bg-gray-700 text-white text-xs"
@@ -194,27 +202,41 @@ export function GamePage({ gameState, hand, uid, roomId, onLeaveRoom }: GamePage
         </div>
       )}
 
-      {/* Main area */}
-      <div className="flex-1 p-3 overflow-auto">
-        <PlayerGrid
-          gameState={gameState}
-          currentUid={uid}
-          currentPlayerBoard={mergedBoard}
-          onRowClick={selectedIndex !== null && !submitting ? handleRowClick : undefined}
-          hasCardSelected={selectedIndex !== null && !submitting}
-        />
-      </div>
+      {/* Body: game column + debug sidebar */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Game column */}
+        <div className="flex-1 flex flex-col min-w-0">
+          {/* Main area */}
+          <div className="flex-1 p-3 overflow-auto">
+            <PlayerGrid
+              gameState={gameState}
+              currentUid={uid}
+              currentPlayerBoard={mergedBoard}
+              onRowClick={selectedIndex !== null && !submitting ? handleRowClick : undefined}
+              hasCardSelected={selectedIndex !== null && !submitting}
+            />
+          </div>
 
-      {/* Hand panel */}
-      <HandPanel
-        hand={hand}
-        gameState={gameState}
-        uid={uid}
-        selectedIndex={selectedIndex}
-        onSelectCard={setSelectedIndex}
-        placements={placements}
-        submitting={submitting}
-      />
+          {/* Hand panel */}
+          <HandPanel
+            hand={hand}
+            gameState={gameState}
+            uid={uid}
+            selectedIndex={selectedIndex}
+            onSelectCard={setSelectedIndex}
+            placements={placements}
+            submitting={submitting}
+          />
+        </div>
+
+        {/* Debug sidebar */}
+        {debugOpen && (
+          <DebugPanel
+            gameState={gameState}
+            currentUid={uid}
+          />
+        )}
+      </div>
 
       {/* Round results modal (inter-round, not final) */}
       {showResults && isRoundComplete && !isMatchComplete && (

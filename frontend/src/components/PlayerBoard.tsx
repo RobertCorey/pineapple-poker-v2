@@ -1,4 +1,6 @@
 import type { Board, Card, Row } from '@shared/core/types';
+import { evaluate5CardHand, evaluate3CardHand } from '@shared/game-logic/hand-evaluation';
+import { describeHand, describe3CardHand } from '../utils/handDescription.ts';
 import { CardComponent } from './CardComponent.tsx';
 
 interface SlotProps {
@@ -31,6 +33,19 @@ function padRow(cards: Card[], size: number): (Card | null)[] {
   return result;
 }
 
+function RowEval({ cards, size, isTop }: { cards: Card[]; size: number; isTop: boolean }) {
+  if (cards.length === size) {
+    const label = isTop
+      ? describe3CardHand(evaluate3CardHand(cards))
+      : describeHand(evaluate5CardHand(cards));
+    return <div className="text-center text-[10px] text-gray-500 -mt-0.5 mb-0.5">{label}</div>;
+  }
+  if (cards.length > 0) {
+    return <div className="text-center text-[10px] text-gray-600 -mt-0.5 mb-0.5">({cards.length}/{size})</div>;
+  }
+  return null;
+}
+
 interface PlayerBoardProps {
   board: Board;
   playerName: string;
@@ -39,9 +54,16 @@ interface PlayerBoardProps {
   onRowClick?: (row: Row) => void;
   hasCardSelected?: boolean;
   small?: boolean;
+  score?: number;
+  hasPlaced?: boolean;
+  isObserver?: boolean;
+  disconnected?: boolean;
 }
 
-export function PlayerBoard({ board, playerName, fouled, isCurrentPlayer, onRowClick, hasCardSelected, small }: PlayerBoardProps) {
+export function PlayerBoard({
+  board, playerName, fouled, isCurrentPlayer, onRowClick, hasCardSelected, small,
+  score, hasPlaced, isObserver, disconnected,
+}: PlayerBoardProps) {
   const topSlots = padRow(board.top, 3);
   const middleSlots = padRow(board.middle, 5);
   const bottomSlots = padRow(board.bottom, 5);
@@ -60,9 +82,19 @@ export function PlayerBoard({ board, playerName, fouled, isCurrentPlayer, onRowC
     `}>
       <div className={`text-center mb-1 ${small ? 'text-xs' : 'text-sm'} text-gray-300 flex items-center justify-center gap-2`}>
         <span>{playerName}</span>
+        {score !== undefined && (
+          <span className={`text-xs ${score >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            [{score >= 0 ? `+${score}` : score}]
+          </span>
+        )}
+        {hasPlaced !== undefined && (
+          <span className="text-xs">{hasPlaced ? '\u2713' : '\u00b7'}</span>
+        )}
         {fouled && (
           <span className="text-xs text-red-400">[FOULED]</span>
         )}
+        {disconnected && <span className="text-xs text-red-500">[DC]</span>}
+        {isObserver && <span className="text-xs text-blue-400">[OBS]</span>}
       </div>
 
       {/* Top row - 3 cards, centered */}
@@ -84,6 +116,7 @@ export function PlayerBoard({ board, playerName, fouled, isCurrentPlayer, onRowC
         ))}
         <div className={small ? 'w-10' : 'w-14'} />
       </div>
+      <RowEval cards={board.top} size={3} isTop />
 
       {/* Middle row - 5 cards */}
       <div
@@ -102,6 +135,7 @@ export function PlayerBoard({ board, playerName, fouled, isCurrentPlayer, onRowC
           />
         ))}
       </div>
+      <RowEval cards={board.middle} size={5} isTop={false} />
 
       {/* Bottom row - 5 cards */}
       <div
@@ -120,6 +154,7 @@ export function PlayerBoard({ board, playerName, fouled, isCurrentPlayer, onRowC
           />
         ))}
       </div>
+      <RowEval cards={board.bottom} size={5} isTop={false} />
     </div>
   );
 }

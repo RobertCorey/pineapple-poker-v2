@@ -1,12 +1,21 @@
 import { useCallback } from 'react';
 import type { Card, GameState } from '@shared/core/types';
 import { GamePhase } from '@shared/core/types';
+import { RANK_NAMES } from '@shared/core/constants';
 import { CardComponent } from './CardComponent.tsx';
 import type { Placement } from './GamePage.tsx';
+
+const SUIT_SYMBOLS: Record<string, string> = { h: '\u2665', d: '\u2666', c: '\u2663', s: '\u2660' };
 
 function cardKey(c: Card): string {
   return `${c.rank}-${c.suit}`;
 }
+
+function cardText(c: Card): string {
+  return `${RANK_NAMES[c.rank]}${SUIT_SYMBOLS[c.suit]}`;
+}
+
+const ROW_SHORT: Record<string, string> = { top: 'top', middle: 'mid', bottom: 'bot' };
 
 interface HandPanelProps {
   hand: Card[];
@@ -91,6 +100,19 @@ export function HandPanel({
                 />
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Text hand summary */}
+        {hand.length > 0 && (
+          <div className="text-[10px] text-gray-600 text-center mt-1">
+            Hand: {hand.map(cardText).join(' ')}
+            {placements.length > 0 && (
+              <> | Placed: {placements.map((p) => `${cardText(p.card)}\u2192${ROW_SHORT[p.row]}`).join(' ')}</>
+            )}
+            {remainingHand.length > 0 && placements.length > 0 && (
+              <> | Remaining: {remainingHand.map(cardText).join(' ')}</>
+            )}
           </div>
         )}
       </div>

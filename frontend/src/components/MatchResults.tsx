@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import type { GameState } from '@shared/core/types';
+import { scorePairwise } from '@shared/game-logic/scoring';
 import { functions } from '../firebase.ts';
 
 interface MatchResultsProps {
@@ -11,6 +12,13 @@ interface MatchResultsProps {
 
 function formatScore(n: number): string {
   return n >= 0 ? `+${n}` : `${n}`;
+}
+
+function pairwiseLabel(rowPoints: number, scoopBonus: number, total: number, aFouled: boolean, bFouled: boolean): string {
+  if (aFouled && bFouled) return `both fouled = ${formatScore(total)}`;
+  if (aFouled || bFouled) return `foul penalty = ${formatScore(total)}`;
+  if (scoopBonus !== 0) return `rows ${formatScore(rowPoints)}  scoop ${formatScore(scoopBonus)}  = ${formatScore(total)}`;
+  return `rows ${formatScore(rowPoints)}  = ${formatScore(total)}`;
 }
 
 export function MatchResults({ gameState, currentUid, roomId }: MatchResultsProps) {
@@ -25,6 +33,10 @@ export function MatchResults({ gameState, currentUid, roomId }: MatchResultsProp
     .sort((a, b) => b.score - a.score);
 
   const roundResults = gameState.roundResults ?? {};
+
+  const activePlayers = gameState.playerOrder
+    .map((uid) => gameState.players[uid])
+    .filter(Boolean);
 
   const handlePlayAgain = useCallback(async () => {
     setRestarting(true);
@@ -82,6 +94,31 @@ export function MatchResults({ gameState, currentUid, roomId }: MatchResultsProp
                   })}
               </tbody>
             </table>
+
+            {/* Pairwise breakdown for final round */}
+            {activePlayers.length >= 2 && (
+              <div className="text-[11px] text-gray-500 border-t border-gray-800 pt-2 mb-3">
+                <div className="font-bold text-gray-400 mb-1">Pairwise</div>
+                {activePlayers.map((pA, i) =>
+                  activePlayers.slice(i + 1).map((pB) => {
+                    const aFouled = roundResults[pA.uid]?.fouled ?? false;
+                    const bFouled = roundResults[pB.uid]?.fouled ?? false;
+                    const result = scorePairwise(
+                      pA.uid, aFouled, pA.board,
+                      pB.uid, bFouled, pB.board,
+                    );
+                    return (
+                      <div key={`${pA.uid}-${pB.uid}`} className="flex justify-between gap-2">
+                        <span className="text-gray-400 truncate">{pA.displayName} vs {pB.displayName}:</span>
+                        <span className="whitespace-nowrap">
+                          {pairwiseLabel(result.rowPoints, result.scoopBonus, result.total, aFouled, bFouled)}
+                        </span>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            )}
           </>
         )}
 

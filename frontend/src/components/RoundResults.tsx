@@ -1,4 +1,5 @@
 import type { GameState } from '@shared/core/types';
+import { scorePairwise } from '@shared/game-logic/scoring';
 
 interface RoundResultsProps {
   gameState: GameState;
@@ -8,6 +9,13 @@ interface RoundResultsProps {
 
 function formatScore(n: number): string {
   return n >= 0 ? `+${n}` : `${n}`;
+}
+
+function pairwiseLabel(rowPoints: number, scoopBonus: number, total: number, aFouled: boolean, bFouled: boolean): string {
+  if (aFouled && bFouled) return `both fouled = ${formatScore(total)}`;
+  if (aFouled || bFouled) return `foul penalty = ${formatScore(total)}`;
+  if (scoopBonus !== 0) return `rows ${formatScore(rowPoints)}  scoop ${formatScore(scoopBonus)}  = ${formatScore(total)}`;
+  return `rows ${formatScore(rowPoints)}  = ${formatScore(total)}`;
 }
 
 export function RoundResults({ gameState, currentUid, onClose }: RoundResultsProps) {
@@ -59,6 +67,31 @@ export function RoundResults({ gameState, currentUid, onClose }: RoundResultsPro
             })}
           </tbody>
         </table>
+
+        {/* Pairwise breakdown */}
+        {players.length >= 2 && (
+          <div className="text-[11px] text-gray-500 border-t border-gray-800 pt-2 mb-3">
+            <div className="font-bold text-gray-400 mb-1">Pairwise</div>
+            {players.map((pA, i) =>
+              players.slice(i + 1).map((pB) => {
+                const aFouled = roundResults[pA.uid]?.fouled ?? false;
+                const bFouled = roundResults[pB.uid]?.fouled ?? false;
+                const result = scorePairwise(
+                  pA.uid, aFouled, pA.board,
+                  pB.uid, bFouled, pB.board,
+                );
+                return (
+                  <div key={`${pA.uid}-${pB.uid}`} className="flex justify-between gap-2">
+                    <span className="text-gray-400 truncate">{pA.displayName} vs {pB.displayName}:</span>
+                    <span className="whitespace-nowrap">
+                      {pairwiseLabel(result.rowPoints, result.scoopBonus, result.total, aFouled, bFouled)}
+                    </span>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
 
         <p className="text-xs text-gray-500 text-center mb-2">Next round starts automatically...</p>
 
