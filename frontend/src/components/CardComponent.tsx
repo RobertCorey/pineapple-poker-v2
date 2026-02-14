@@ -30,15 +30,17 @@ const SUIT_SELECTED_RING: Record<string, string> = {
   c: 'ring-green-300',
 };
 
-export type CardSize = 'sm' | 'md' | 'lg';
+export type CardSize = 'xs' | 'sm' | 'md' | 'lg';
 
 const SIZE_CLASSES: Record<CardSize, string> = {
+  xs: 'w-6 h-8 text-[7px] rounded-sm',
   sm: 'w-8 h-11 text-[10px] rounded',
   md: 'w-10 h-14 text-xs rounded-md',
   lg: 'w-14 h-20 text-sm rounded-lg',
 };
 
 const RANK_SIZE: Record<CardSize, string> = {
+  xs: 'text-[8px] leading-none',
   sm: 'text-xs leading-none',
   md: 'text-sm leading-none',
   lg: 'text-lg leading-none',
