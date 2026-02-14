@@ -146,7 +146,6 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
 
   const isObserver = !gameState.playerOrder.includes(uid);
   const currentPlayer = gameState.players[uid];
-  const expectedCards = gameState.street === 1 ? 5 : 3 + 2 * gameState.street;
 
   return (
     <div className="h-[100dvh] bg-gray-900 text-white font-mono flex flex-col overflow-hidden">
@@ -200,10 +199,7 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
               hasCardSelected={selectedIndex !== null && !submitting}
               cardSize="sm"
               score={currentPlayer.score}
-              hasPlaced={(() => {
-                const b = mergedBoard;
-                return b.top.length + b.middle.length + b.bottom.length >= expectedCards;
-              })()}
+              hasPlaced={currentPlayer.hasPlaced}
             />
           )}
         </div>

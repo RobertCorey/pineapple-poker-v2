@@ -144,7 +144,7 @@ export class Dealer {
     if (isPlacementPhase(game.phase)) {
       const allPlaced = game.playerOrder.every((uid) => {
         const p = game.players[uid];
-        return !p || p.fouled || p.currentHand.length === 0;
+        return !p || p.fouled || p.hasPlaced;
       });
       if (allPlaced) {
         console.log(`[Dealer] [${roomId}] All placed in ${game.phase} — advancing`);

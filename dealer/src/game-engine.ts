@@ -20,7 +20,7 @@ import { createShuffledDeck, dealCards } from '../../shared/game-logic/deck';
 import { scoreAllPlayers, isFoul } from '../../shared/game-logic/scoring';
 import { gameDoc, handDoc, deckDoc } from '../../shared/core/firestore-paths';
 import { emptyBoard, phaseForStreet } from '../../shared/game-logic/board-utils';
-import { parseGameState, parseDeckDoc } from '../../shared/core/schemas';
+import { parseGameState, parseDeckDoc, parseHandDoc } from '../../shared/core/schemas';
 
 // ---- Helper: all active (non-fouled) players have placed their cards ----
 function allActivePlaced(
@@ -29,20 +29,8 @@ function allActivePlaced(
 ): boolean {
   return playerOrder.every((uid) => {
     const p = players[uid];
-    return !p || p.fouled || p.currentHand.length === 0;
+    return !p || p.fouled || p.hasPlaced;
   });
-}
-
-/** Copy all players NOT in updatedPlayers from source (preserves observers). */
-function preserveObservers(
-  allPlayers: Record<string, PlayerState>,
-  updatedPlayers: Record<string, PlayerState>,
-): void {
-  for (const uid of Object.keys(allPlayers)) {
-    if (!updatedPlayers[uid]) {
-      updatedPlayers[uid] = allPlayers[uid];
-    }
-  }
 }
 
 // ---- Public API ----
@@ -60,55 +48,43 @@ export async function maybeStartRound(db: Firestore, roomId: string): Promise<bo
 
     const game = parseGameState(snap.data());
 
-    // Can only start from Lobby phase
     if (game.phase !== GP.Lobby) return false;
-
-    // Host must have pressed Start (round >= 1)
     if (game.round < 1) return false;
-
-    // Need at least 2 players to start
     if (game.playerOrder.length < 2) return false;
 
-    // Deal cards to all players in playerOrder
     const now = Date.now();
     const phaseDeadline = now + INITIAL_DEAL_TIMEOUT_MS;
-    const updatedPlayers: Record<string, PlayerState> = {};
+
+    // Field-path updates — only touch the fields we need, observers stay untouched
+    const updates: Record<string, any> = {
+      phase: GP.InitialDeal,
+      street: 1,
+      phaseDeadline,
+      updatedAt: now,
+    };
 
     for (const uid of game.playerOrder) {
       const deck = createShuffledDeck();
       const { dealt, remaining } = dealCards(deck, INITIAL_DEAL_COUNT);
 
-      updatedPlayers[uid] = {
-        ...game.players[uid],
-        board: emptyBoard(),
-        currentHand: dealt,
-        fouled: false,
-      };
+      updates[`players.${uid}.board`] = emptyBoard();
+      updates[`players.${uid}.hasPlaced`] = false;
+      updates[`players.${uid}.fouled`] = false;
 
       tx.set(db.doc(deckDoc(uid, roomId)), { cards: remaining });
       tx.set(db.doc(handDoc(uid, roomId)), { cards: dealt });
     }
 
-    // Preserve observers (in players but not in playerOrder)
+    // Reset observer boards (they aren't in playerOrder)
     for (const uid of Object.keys(game.players)) {
-      if (!updatedPlayers[uid]) {
-        updatedPlayers[uid] = {
-          ...game.players[uid],
-          board: emptyBoard(),
-          currentHand: [],
-          fouled: false,
-        };
+      if (!game.playerOrder.includes(uid)) {
+        updates[`players.${uid}.board`] = emptyBoard();
+        updates[`players.${uid}.hasPlaced`] = true;
+        updates[`players.${uid}.fouled`] = false;
       }
     }
 
-    tx.update(gameRef, {
-      phase: GP.InitialDeal,
-      street: 1,
-      players: updatedPlayers,
-      phaseDeadline,
-      updatedAt: now,
-    });
-
+    tx.update(gameRef, updates);
     return true;
   });
 }
@@ -139,13 +115,11 @@ export async function advanceStreet(db: Firestore, roomId: string): Promise<'sco
       return 'noop';
     }
 
-    // Verify all active players have placed
     if (!allActivePlaced(game.players, game.playerOrder)) {
       return 'noop';
     }
 
     if (game.street >= TOTAL_STREETS) {
-      // All streets done - go to scoring
       tx.update(gameRef, {
         phase: GP.Scoring,
         updatedAt: Date.now(),
@@ -154,51 +128,37 @@ export async function advanceStreet(db: Firestore, roomId: string): Promise<'sco
     }
 
     // Read ALL deck docs first (Firestore requires all reads before writes)
-    // Only read decks for non-fouled players
     const deckSnaps = new Map<string, Card[]>();
     for (const uid of game.playerOrder) {
       if (game.players[uid].fouled) continue;
       const deckSnap = await tx.get(db.doc(deckDoc(uid, roomId)));
-      const deckData = parseDeckDoc(deckSnap.data());
-      deckSnaps.set(uid, deckData.cards);
+      deckSnaps.set(uid, parseDeckDoc(deckSnap.data()).cards);
     }
 
-    // Now do all writes
+    // Field-path updates — observers untouched
     const nextStreet = game.street + 1;
     const nextPhase = phaseForStreet(nextStreet);
     const phaseDeadline = Date.now() + STREET_TIMEOUT_MS;
-    const updatedPlayers: Record<string, PlayerState> = {};
+    const updates: Record<string, any> = {
+      phase: nextPhase,
+      street: nextStreet,
+      phaseDeadline,
+      updatedAt: Date.now(),
+    };
 
     for (const uid of game.playerOrder) {
-      if (game.players[uid].fouled) {
-        // Fouled players get no cards
-        updatedPlayers[uid] = { ...game.players[uid], currentHand: [] };
-        continue;
-      }
+      if (game.players[uid].fouled) continue;
 
       const deckCards = deckSnaps.get(uid)!;
       const { dealt, remaining } = dealCards(deckCards, STREET_DEAL_COUNT);
 
-      updatedPlayers[uid] = {
-        ...game.players[uid],
-        currentHand: dealt,
-      };
+      updates[`players.${uid}.hasPlaced`] = false;
 
       tx.set(db.doc(deckDoc(uid, roomId)), { cards: remaining });
       tx.set(db.doc(handDoc(uid, roomId)), { cards: dealt });
     }
 
-    // Preserve observers
-    preserveObservers(game.players, updatedPlayers);
-
-    tx.update(gameRef, {
-      phase: nextPhase,
-      street: nextStreet,
-      players: updatedPlayers,
-      phaseDeadline,
-      updatedAt: Date.now(),
-    });
-
+    tx.update(gameRef, updates);
     return 'advanced';
   });
 }
@@ -217,51 +177,36 @@ export async function scoreRound(db: Firestore, roomId: string): Promise<void> {
     const game = parseGameState(snap.data());
     if (game.phase !== GP.Scoring) return;
 
-    // Build boards map and fouls map
     const boards = new Map<string, Board>();
     const fouls = new Map<string, boolean>();
     for (const uid of game.playerOrder) {
       const player = game.players[uid];
       boards.set(uid, player.board);
-      // Fouled if auto-fouled (timeout) OR natural foul (bad row ordering)
       fouls.set(uid, player.fouled || isFoul(player.board));
     }
 
     const result = scoreAllPlayers(boards, fouls);
 
-    // Build results map and accumulate scores
     const roundResults: Record<string, { netScore: number; fouled: boolean }> = {};
     for (const ps of result.players) {
-      roundResults[ps.uid] = {
-        netScore: ps.netScore,
-        fouled: ps.fouled,
-      };
+      roundResults[ps.uid] = { netScore: ps.netScore, fouled: ps.fouled };
     }
 
-    // Update game state
-    const updatedPlayers: Record<string, PlayerState> = {};
-    for (const uid of game.playerOrder) {
-      const player = game.players[uid];
-      const roundScore = roundResults[uid]?.netScore ?? 0;
-      updatedPlayers[uid] = {
-        ...player,
-        currentHand: [],
-        score: player.score + roundScore,
-      };
-    }
-
-    // Preserve observers
-    preserveObservers(game.players, updatedPlayers);
-
+    // Field-path updates — only update scores for active players
     const isFinalRound = game.round >= game.totalRounds;
-
-    tx.update(gameRef, {
+    const updates: Record<string, any> = {
       phase: isFinalRound ? GP.MatchComplete : GP.Complete,
       roundResults,
-      players: updatedPlayers,
       phaseDeadline: isFinalRound ? null : Date.now() + INTER_ROUND_DELAY_MS,
       updatedAt: Date.now(),
-    });
+    };
+
+    for (const uid of game.playerOrder) {
+      const roundScore = roundResults[uid]?.netScore ?? 0;
+      updates[`players.${uid}.score`] = game.players[uid].score + roundScore;
+    }
+
+    tx.update(gameRef, updates);
   });
 }
 
@@ -280,39 +225,23 @@ export async function resetForNextRound(db: Firestore, roomId: string): Promise<
     const game = parseGameState(snap.data());
     if (game.phase !== GP.Complete) return;
 
-    const updatedPlayers: Record<string, PlayerState> = {};
-
-    // Reset active players' boards/hands but keep scores
-    for (const uid of game.playerOrder) {
-      updatedPlayers[uid] = {
-        ...game.players[uid],
-        board: emptyBoard(),
-        currentHand: [],
-        fouled: false,
-      };
-    }
-
-    // Preserve observers (in players but not in playerOrder)
-    for (const uid of Object.keys(game.players)) {
-      if (!game.playerOrder.includes(uid)) {
-        updatedPlayers[uid] = {
-          ...game.players[uid],
-          board: emptyBoard(),
-          currentHand: [],
-          fouled: false,
-        };
-      }
-    }
-
-    tx.update(gameRef, {
+    // Field-path updates — reset all players uniformly
+    const updates: Record<string, any> = {
       phase: GP.Lobby,
       street: 0,
-      players: updatedPlayers,
       round: game.round + 1,
       phaseDeadline: null,
       roundResults: FieldValue.delete(),
       updatedAt: Date.now(),
-    });
+    };
+
+    for (const uid of Object.keys(game.players)) {
+      updates[`players.${uid}.board`] = emptyBoard();
+      updates[`players.${uid}.hasPlaced`] = true;
+      updates[`players.${uid}.fouled`] = false;
+    }
+
+    tx.update(gameRef, updates);
   });
 }
 
@@ -329,7 +258,6 @@ export async function handlePhaseTimeout(db: Firestore, roomId: string): Promise
 
     const game = parseGameState(snap.data());
 
-    // Only act during placement phases when deadline has actually passed
     if (
       game.phase !== GP.InitialDeal &&
       game.phase !== GP.Street2 &&
@@ -339,15 +267,33 @@ export async function handlePhaseTimeout(db: Firestore, roomId: string): Promise
     ) return;
     if (game.phaseDeadline !== null && game.phaseDeadline > Date.now()) return;
 
-    const updatedPlayers: Record<string, PlayerState> = { ...game.players };
-    let changed = false;
-
+    // Collect unplaced player UIDs
+    const unplacedUids: string[] = [];
     for (const uid of game.playerOrder) {
       const player = game.players[uid];
+      if (!player.hasPlaced && !player.fouled) {
+        unplacedUids.push(uid);
+      }
+    }
+    if (unplacedUids.length === 0) return;
 
-      // Skip if already placed or already fouled
-      if (player.currentHand.length === 0) continue;
-      if (player.fouled) continue;
+    // Read all hand docs FIRST (Firestore requires all reads before writes)
+    const handSnaps = new Map<string, Card[]>();
+    for (const uid of unplacedUids) {
+      const handSnap = await tx.get(db.doc(handDoc(uid, roomId)));
+      handSnaps.set(uid, parseHandDoc(handSnap.data()).cards);
+    }
+
+    // Now do all writes via field-path updates
+    const updates: Record<string, any> = {
+      phaseDeadline: null,
+      updatedAt: Date.now(),
+    };
+
+    for (const uid of unplacedUids) {
+      const player = game.players[uid];
+      const hand = handSnaps.get(uid)!;
+      if (hand.length === 0) continue;
 
       const newBoard: Board = {
         top: [...player.board.top],
@@ -356,39 +302,25 @@ export async function handlePhaseTimeout(db: Firestore, roomId: string): Promise
       };
 
       // Shuffle hand for random placement
-      const shuffled = [...player.currentHand];
+      const shuffled = [...hand];
       for (let i = shuffled.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
       }
 
       if (game.street === 1) {
-        // Initial deal: place all 5 cards into free slots
         autoPlaceCards(shuffled, newBoard, 5);
       } else {
-        // Streets 2-5: place 2, discard 1
         autoPlaceCards(shuffled, newBoard, 2);
-        // 3rd card is discarded (just don't place it)
       }
 
-      updatedPlayers[uid] = {
-        ...player,
-        board: newBoard,
-        currentHand: [],
-      };
+      updates[`players.${uid}.board`] = newBoard;
+      updates[`players.${uid}.hasPlaced`] = true;
       tx.set(db.doc(handDoc(uid, roomId)), { cards: [] });
-      changed = true;
       console.log(`[Dealer] [${roomId}] Auto-placed cards for ${player.displayName || uid}`);
     }
 
-    if (changed) {
-      // Clear deadline to prevent re-processing
-      tx.update(gameRef, {
-        players: updatedPlayers,
-        phaseDeadline: null,
-        updatedAt: Date.now(),
-      });
-    }
+    tx.update(gameRef, updates);
   });
 }
 
@@ -411,14 +343,10 @@ function autoPlaceCards(cards: Card[], board: Board, count: number): void {
 
 /**
  * Check if all active players have placed and advance the game.
- * Called by the dealer after detecting state changes.
- *
- * Delegates to advanceStreet() which handles all logic inside a transaction.
- * Loops (instead of recursing) to handle the case where all remaining
- * players are fouled after advancing — each iteration is a new transaction.
+ * Loops to handle the case where all remaining players are fouled.
  */
 export async function checkAndAdvance(db: Firestore, roomId: string): Promise<void> {
-  const MAX_ITERATIONS = TOTAL_STREETS + 1; // safety bound
+  const MAX_ITERATIONS = TOTAL_STREETS + 1;
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
     const result = await advanceStreet(db, roomId);
@@ -431,8 +359,5 @@ export async function checkAndAdvance(db: Firestore, roomId: string): Promise<vo
     if (result === 'noop') {
       return;
     }
-
-    // result === 'advanced' — loop to check if the next street also needs advancing
-    // (e.g., all remaining players are fouled)
   }
 }

@@ -14,7 +14,7 @@ import {
 } from '../../shared/core/constants';
 import { gameDoc, handDoc, deckDoc } from '../../shared/core/firestore-paths';
 import { emptyBoard } from '../../shared/game-logic/board-utils';
-import { parseGameState, CardSchema } from '../../shared/core/schemas';
+import { parseGameState, parseHandDoc, CardSchema } from '../../shared/core/schemas';
 
 const db = () => admin.firestore();
 
@@ -65,7 +65,7 @@ function newPlayerState(uid: string, displayName: string): PlayerState {
     uid,
     displayName,
     board: emptyBoard(),
-    currentHand: [],
+    hasPlaced: true,
     disconnected: false,
     fouled: false,
     score: 0,
@@ -85,29 +85,28 @@ async function removePlayer(uid: string, roomId: string): Promise<void> {
 
     if (!game.players[uid]) return;
 
-    // Remove from players map
-    const players = { ...game.players };
-    delete players[uid];
-
-    // Remove from playerOrder
-    const newPlayerOrder = game.playerOrder.filter((u) => u !== uid);
-
     // Clean up subcollection docs
     tx.delete(db().doc(handDoc(uid, roomId)));
     tx.delete(db().doc(deckDoc(uid, roomId)));
 
     // If no players remain, delete the game
-    if (Object.keys(players).length === 0) {
+    const remainingCount = Object.keys(game.players).length - 1;
+    if (remainingCount === 0) {
       tx.delete(gameRef);
       return;
     }
 
-    // If leaving player is host, promote next player in playerOrder
-    const updates: { players: Record<string, PlayerState>; playerOrder: string[]; updatedAt: number; hostUid?: string } = {
-      players,
+    // Remove from playerOrder
+    const newPlayerOrder = game.playerOrder.filter((u) => u !== uid);
+
+    // Field-path updates — remove player, update order
+    const updates: Record<string, any> = {
+      [`players.${uid}`]: FieldValue.delete(),
       playerOrder: newPlayerOrder,
       updatedAt: Date.now(),
     };
+
+    // If leaving player is host, promote next player in playerOrder
     if (uid === game.hostUid && newPlayerOrder.length > 0) {
       updates.hostUid = newPlayerOrder[0];
     }
@@ -168,24 +167,19 @@ export const joinGame = onCall({ maxInstances: 10 }, async (request) => {
         throw new HttpsError('resource-exhausted', `Room is full (max ${MAX_PLAYERS} players).`);
       }
 
-      const players = { ...game.players };
-      players[uid] = newPlayerState(uid, displayName);
+      // Field-path updates — only touch the new player + playerOrder
+      const updates: Record<string, any> = {
+        [`players.${uid}`]: newPlayerState(uid, displayName),
+        updatedAt: now,
+      };
 
       if (game.phase === GP.Lobby || game.phase === GP.MatchComplete) {
         // Join as active player
-        const playerOrder = [...game.playerOrder, uid];
-        tx.update(gameRef, {
-          players,
-          playerOrder,
-          updatedAt: now,
-        });
-      } else {
-        // Match in progress — join as observer only
-        tx.update(gameRef, {
-          players,
-          updatedAt: now,
-        });
+        updates.playerOrder = [...game.playerOrder, uid];
       }
+      // Match in progress — observer only (not added to playerOrder)
+
+      tx.update(gameRef, updates);
     }
   });
 
@@ -223,6 +217,7 @@ export const placeCards = onCall({ maxInstances: 10 }, async (request) => {
   const gameRef = db().doc(gameDoc(roomId));
 
   await db().runTransaction(async (tx) => {
+    // Read game doc and hand doc (all reads before writes)
     const snap = await tx.get(gameRef);
     if (!snap.exists) {
       throw new HttpsError('not-found', 'No game exists.');
@@ -253,12 +248,16 @@ export const placeCards = onCall({ maxInstances: 10 }, async (request) => {
       throw new HttpsError('failed-precondition', 'Observers cannot place cards.');
     }
 
-    if (player.currentHand.length === 0) {
+    if (player.hasPlaced) {
       throw new HttpsError(
         'failed-precondition',
         'You have already placed your cards this street.',
       );
     }
+
+    // Read hand from subcollection
+    const handSnap = await tx.get(db().doc(handDoc(uid, roomId)));
+    const hand = parseHandDoc(handSnap.data()).cards;
 
     // Validate placement count
     if (game.street === 1) {
@@ -285,7 +284,7 @@ export const placeCards = onCall({ maxInstances: 10 }, async (request) => {
     if (discard) allCards.push(discard);
 
     for (const card of allCards) {
-      const inHand = player.currentHand.some(
+      const inHand = hand.some(
         (h) => h.suit === card.suit && h.rank === card.rank,
       );
       if (!inHand) {
@@ -315,16 +314,10 @@ export const placeCards = onCall({ maxInstances: 10 }, async (request) => {
       newBoard[row] = [...newBoard[row], placement.card];
     }
 
-    // Apply changes
-    const updatedPlayers = { ...game.players };
-    updatedPlayers[uid] = {
-      ...player,
-      board: newBoard,
-      currentHand: [],
-    };
-
+    // Field-path updates — only touch this player's board and hasPlaced
     tx.update(gameRef, {
-      players: updatedPlayers,
+      [`players.${uid}.board`]: newBoard,
+      [`players.${uid}.hasPlaced`]: true,
       updatedAt: Date.now(),
     });
 
@@ -406,31 +399,25 @@ export const playAgain = onCall({ maxInstances: 10 }, async (request) => {
       throw new HttpsError('failed-precondition', 'Match is not complete.');
     }
 
-    // Reset all players: scores to 0, boards/hands cleared
-    const updatedPlayers: Record<string, PlayerState> = {};
-    const updatedPlayerOrder: string[] = [];
-
-    for (const pUid of Object.keys(game.players)) {
-      updatedPlayers[pUid] = {
-        ...game.players[pUid],
-        board: emptyBoard(),
-        currentHand: [],
-        fouled: false,
-        score: 0,
-      };
-      updatedPlayerOrder.push(pUid);
-    }
-
-    tx.update(gameRef, {
+    // Field-path updates — reset all players' scores/boards, promote all to playerOrder
+    const updates: Record<string, any> = {
       phase: GP.Lobby,
       round: 0,
       street: 0,
-      players: updatedPlayers,
-      playerOrder: updatedPlayerOrder,
+      playerOrder: Object.keys(game.players),
       roundResults: FieldValue.delete(),
       phaseDeadline: null,
       updatedAt: Date.now(),
-    });
+    };
+
+    for (const pUid of Object.keys(game.players)) {
+      updates[`players.${pUid}.board`] = emptyBoard();
+      updates[`players.${pUid}.hasPlaced`] = true;
+      updates[`players.${pUid}.fouled`] = false;
+      updates[`players.${pUid}.score`] = 0;
+    }
+
+    tx.update(gameRef, updates);
   });
 
   return { success: true };

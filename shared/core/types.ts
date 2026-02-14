@@ -98,7 +98,7 @@ export interface PlayerState {
   uid: string;
   displayName: string;
   board: Board;
-  currentHand: Card[];   // cards currently in hand (to be placed)
+  hasPlaced: boolean;    // true when player has placed cards (or has none to place)
   disconnected: boolean;
   fouled: boolean;
   score: number;

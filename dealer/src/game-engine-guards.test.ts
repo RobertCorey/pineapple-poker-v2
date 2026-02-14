@@ -49,7 +49,7 @@ function makePlayer(uid: string, overrides: Partial<PlayerState> = {}): PlayerSt
     uid,
     displayName: uid,
     board: emptyBoard(),
-    currentHand: [],
+    hasPlaced: true,
     disconnected: false,
     fouled: false,
     score: 0,
@@ -89,8 +89,8 @@ describe('handlePhaseTimeout guards', () => {
       street: 5,
       playerOrder: ['p1', 'p2'],
       players: {
-        p1: makePlayer('p1', { currentHand: makeHand(3) }),
-        p2: makePlayer('p2', { currentHand: makeHand(3) }),
+        p1: makePlayer('p1', { hasPlaced: false }),
+        p2: makePlayer('p2', { hasPlaced: false }),
       },
       phaseDeadline: Date.now() - 1000, // expired
     });
@@ -110,7 +110,7 @@ describe('handlePhaseTimeout guards', () => {
       street: 5,
       playerOrder: ['p1'],
       players: {
-        p1: makePlayer('p1', { currentHand: makeHand(3) }),
+        p1: makePlayer('p1', { hasPlaced: false }),
       },
       phaseDeadline: Date.now() - 1000,
     });
@@ -128,20 +128,20 @@ describe('handlePhaseTimeout guards', () => {
       street: 1,
       playerOrder: ['p1', 'p2'],
       players: {
-        p1: makePlayer('p1', { currentHand: makeHand(5) }),
+        p1: makePlayer('p1', { hasPlaced: false }),
         p2: makePlayer('p2'),
       },
       phaseDeadline: Date.now() + 30_000, // 30 seconds from now
     });
 
-    // Set up hand docs so the function can clear them
+    // Set up hand docs so the function can read them
     await db.doc(handDoc('p1', roomId)).set({ cards: makeHand(5) });
 
     await handlePhaseTimeout(db, roomId);
     const game = await getGame(roomId);
 
-    // p1 should NOT be fouled — deadline hasn't passed
-    expect(game.players.p1.fouled).toBe(false);
+    // p1 should NOT have been auto-placed — deadline hasn't passed
+    expect(game.players.p1.hasPlaced).toBe(false);
   });
 
   it('auto-places cards for unplaced players when deadline has expired', async () => {
@@ -151,7 +151,7 @@ describe('handlePhaseTimeout guards', () => {
       street: 1,
       playerOrder: ['p1', 'p2'],
       players: {
-        p1: makePlayer('p1', { currentHand: makeHand(5) }),
+        p1: makePlayer('p1', { hasPlaced: false }),
         p2: makePlayer('p2'),
       },
       phaseDeadline: Date.now() - 1000, // expired
@@ -163,7 +163,7 @@ describe('handlePhaseTimeout guards', () => {
     const game = await getGame(roomId);
 
     // p1 had cards auto-placed, p2 already placed
-    expect(game.players.p1.currentHand).toEqual([]);
+    expect(game.players.p1.hasPlaced).toBe(true);
     expect(game.players.p2.fouled).toBe(false);
     expect(game.phaseDeadline).toBeNull();
   });
@@ -225,7 +225,7 @@ describe('advanceStreet guards', () => {
       street: 1,
       playerOrder: ['p1', 'p2'],
       players: {
-        p1: makePlayer('p1', { currentHand: makeHand(5) }),
+        p1: makePlayer('p1', { hasPlaced: false }),
         p2: makePlayer('p2'),
       },
     });

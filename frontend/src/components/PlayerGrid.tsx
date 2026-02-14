@@ -9,7 +9,6 @@ interface OpponentGridProps {
 /** Top half: opponents in auto-fitting grid + observer list */
 export function OpponentGrid({ gameState, currentUid }: OpponentGridProps) {
   const otherPlayers = gameState.playerOrder.filter((uid) => uid !== currentUid);
-  const expectedCards = gameState.street === 1 ? 5 : 3 + 2 * gameState.street;
 
   // Observers: players in the players map but not in playerOrder
   const observers = Object.values(gameState.players).filter(
@@ -31,7 +30,6 @@ export function OpponentGrid({ gameState, currentUid }: OpponentGridProps) {
           {otherPlayers.map((uid) => {
             const player = gameState.players[uid];
             if (!player) return null;
-            const boardCount = player.board.top.length + player.board.middle.length + player.board.bottom.length;
             return (
               <PlayerBoard
                 key={uid}
@@ -40,7 +38,7 @@ export function OpponentGrid({ gameState, currentUid }: OpponentGridProps) {
                 fouled={player.fouled}
                 cardSize="sm"
                 score={player.score}
-                hasPlaced={boardCount >= expectedCards}
+                hasPlaced={player.hasPlaced}
                 disconnected={player.disconnected}
               />
             );
@@ -69,7 +67,6 @@ interface PlayerSectionProps {
 /** Bottom half: current player's board */
 export function PlayerSection({ gameState, currentUid, currentPlayerBoard, onRowClick, hasCardSelected }: PlayerSectionProps) {
   const currentPlayer = gameState.players[currentUid];
-  const expectedCards = gameState.street === 1 ? 5 : 3 + 2 * gameState.street;
 
   if (!currentPlayer) return null;
 
@@ -84,10 +81,7 @@ export function PlayerSection({ gameState, currentUid, currentPlayerBoard, onRow
         hasCardSelected={hasCardSelected}
         cardSize="md"
         score={currentPlayer.score}
-        hasPlaced={(() => {
-          const b = currentPlayerBoard || currentPlayer.board;
-          return b.top.length + b.middle.length + b.bottom.length >= expectedCards;
-        })()}
+        hasPlaced={currentPlayer.hasPlaced}
       />
     </div>
   );

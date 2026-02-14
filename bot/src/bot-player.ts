@@ -13,6 +13,7 @@ export class BotPlayer {
   private unsubscribe: (() => void) | null = null;
   private placing = false;
   private lastPlacedDeadline: number | null = null;
+  private currentHand: Card[] = [];
 
   constructor(name: string, db: Firestore, roomId: string) {
     this.name = name;
@@ -46,15 +47,31 @@ export class BotPlayer {
     });
   }
 
-  /** Start listening to game state and auto-placing cards. */
+  /** Start listening to game state and hand subcollection, auto-placing cards. */
   listen(): void {
-    const ref = this.db.doc(`games/${this.roomId}`);
-    this.unsubscribe = ref.onSnapshot((snap) => {
+    const gameRef = this.db.doc(`games/${this.roomId}`);
+    const gameUnsub = gameRef.onSnapshot((snap) => {
       if (!snap.exists) return;
       this.onGameUpdate(snap.data()!).catch((err: Error) => {
         console.error(`[${this.name}] Update handler error: ${err.message}`);
       });
     });
+
+    // Listen to hand subcollection for dealt cards
+    const handRef = this.db.doc(`games/${this.roomId}/hands/${this._uid}`);
+    const handUnsub = handRef.onSnapshot((snap) => {
+      if (!snap.exists) {
+        this.currentHand = [];
+        return;
+      }
+      const data = snap.data() as { cards?: Card[] };
+      this.currentHand = data?.cards ?? [];
+    });
+
+    this.unsubscribe = () => {
+      gameUnsub();
+      handUnsub();
+    };
   }
 
   async startMatch(): Promise<void> {
@@ -84,8 +101,8 @@ export class BotPlayer {
     const placementPhases = ['initial_deal', 'street_2', 'street_3', 'street_4', 'street_5'];
     if (!placementPhases.includes(phase)) return;
 
-    const hand = player.currentHand as Card[];
-    if (!hand || hand.length === 0) return;
+    const hand = this.currentHand;
+    if (hand.length === 0) return;
 
     // Guards against double-placing
     const deadline = game.phaseDeadline as number | null;

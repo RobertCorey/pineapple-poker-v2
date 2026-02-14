@@ -8,7 +8,6 @@ interface MobileOpponentGridProps {
 
 export function MobileOpponentGrid({ gameState, currentUid }: MobileOpponentGridProps) {
   const otherPlayers = gameState.playerOrder.filter((uid) => uid !== currentUid);
-  const expectedCards = gameState.street === 1 ? 5 : 3 + 2 * gameState.street;
 
   const observers = Object.values(gameState.players).filter(
     (p) => !gameState.playerOrder.includes(p.uid)
@@ -36,7 +35,6 @@ export function MobileOpponentGrid({ gameState, currentUid }: MobileOpponentGrid
           {otherPlayers.map((uid) => {
             const player = gameState.players[uid];
             if (!player) return null;
-            const boardCount = player.board.top.length + player.board.middle.length + player.board.bottom.length;
             return (
               <div key={uid} className={otherPlayers.length === 1 ? 'w-40' : ''}>
                 <PlayerBoard
@@ -45,7 +43,7 @@ export function MobileOpponentGrid({ gameState, currentUid }: MobileOpponentGrid
                   fouled={player.fouled}
                   cardSize="xs"
                   score={player.score}
-                  hasPlaced={boardCount >= expectedCards}
+                  hasPlaced={player.hasPlaced}
                   disconnected={player.disconnected}
                 />
               </div>

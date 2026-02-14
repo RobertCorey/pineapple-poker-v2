@@ -32,7 +32,6 @@ export function DebugPanel({ gameState, currentUid }: DebugPanelProps) {
     return () => clearInterval(interval);
   }, []);
 
-  const expectedCards = gameState.street === 1 ? 5 : 3 + 2 * gameState.street;
   const hostName = gameState.players[gameState.hostUid]?.displayName ?? '?';
 
   return (
@@ -76,8 +75,6 @@ export function DebugPanel({ gameState, currentUid }: DebugPanelProps) {
         <tbody>
           {Object.values(gameState.players).map((player) => {
             const isActive = gameState.playerOrder.includes(player.uid);
-            const boardCount = player.board.top.length + player.board.middle.length + player.board.bottom.length;
-            const hasPlaced = boardCount >= expectedCards;
             const isYou = player.uid === currentUid;
 
             return (
@@ -89,7 +86,7 @@ export function DebugPanel({ gameState, currentUid }: DebugPanelProps) {
                   {player.disconnected && <span className="ml-1 text-red-500">[dc]</span>}
                 </td>
                 <td className="text-right py-0.5">{player.score}</td>
-                <td className="text-center py-0.5">{hasPlaced ? '\u2713' : '\u00b7'}</td>
+                <td className="text-center py-0.5">{player.hasPlaced ? '\u2713' : '\u00b7'}</td>
                 <td className="text-center py-0.5">{player.fouled ? '!' : '\u00b7'}</td>
                 <td className="text-center py-0.5 text-gray-600">{isActive ? 'act' : 'obs'}</td>
               </tr>
@@ -98,7 +95,7 @@ export function DebugPanel({ gameState, currentUid }: DebugPanelProps) {
         </tbody>
       </table>
       <div className="mt-1 text-[10px] text-gray-600">
-        P=placed F=fouled St=status | expect {expectedCards} cards
+        P=placed F=fouled St=status
       </div>
     </div>
   );

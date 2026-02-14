@@ -69,7 +69,7 @@ function makePlayer(uid: string, overrides: Record<string, unknown> = {}): Recor
     uid,
     displayName: uid,
     board: { top: [], middle: [], bottom: [] },
-    currentHand: [],
+    hasPlaced: true,
     disconnected: false,
     fouled: false,
     score: 0,
@@ -110,14 +110,14 @@ function placementPhaseState(opts: {
 } = {}) {
   const phase = opts.phase ?? 'initial_deal';
   const deadline = opts.deadline ?? Date.now() + 30_000;
-  const hand = opts.allPlaced ? [] : [{ rank: 14, suit: 's' }];
+  const placed = opts.allPlaced !== false;
   return gameState({
     phase,
     street: 1,
     round: 1,
     playerOrder: ['p1', 'p2'],
     players: {
-      p1: makePlayer('p1', { currentHand: hand }),
+      p1: makePlayer('p1', { hasPlaced: placed }),
       p2: makePlayer('p2'),
     },
     phaseDeadline: deadline,
@@ -300,7 +300,7 @@ describe('Dealer', () => {
 
   describe('timeout callbacks', () => {
     it('placement timeout calls handlePhaseTimeout then checkAndAdvance with roomId', async () => {
-      db.emitChange(ROOM, placementPhaseState({ deadline: Date.now() + 1_000 }));
+      db.emitChange(ROOM, placementPhaseState({ allPlaced: false, deadline: Date.now() + 1_000 }));
       await vi.advanceTimersByTimeAsync(1_000);
 
       expect(mockHandlePhaseTimeout).toHaveBeenCalledTimes(1);

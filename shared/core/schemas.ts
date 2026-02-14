@@ -57,7 +57,7 @@ export const PlayerStateSchema = z.object({
   uid: z.string(),
   displayName: z.string(),
   board: BoardSchema,
-  currentHand: z.array(CardSchema),
+  hasPlaced: z.boolean(),
   disconnected: z.boolean(),
   fouled: z.boolean(),
   score: z.number(),
