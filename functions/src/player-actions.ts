@@ -1,7 +1,8 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
-import type { Card, Board, Row, GamePhase } from '../../shared/core/types';
+import { z } from 'zod';
+import type { Card, Board, Row, PlayerState } from '../../shared/core/types';
 import { GamePhase as GP } from '../../shared/core/types';
 import {
   INITIAL_DEAL_COUNT,
@@ -13,15 +14,62 @@ import {
 } from '../../shared/core/constants';
 import { gameDoc, handDoc, deckDoc } from '../../shared/core/firestore-paths';
 import { emptyBoard } from '../../shared/game-logic/board-utils';
+import { parseGameState, CardSchema } from '../../shared/core/schemas';
 
 const db = () => admin.firestore();
 
-function extractRoomId(data: Record<string, unknown> | undefined): string {
-  const roomId = data?.roomId as string;
-  if (!roomId) {
+// ---- Request validation schemas ----
+
+const RoomIdSchema = z.object({
+  roomId: z.string().min(1, 'Must provide roomId.'),
+});
+
+const JoinGameSchema = RoomIdSchema.extend({
+  displayName: z.string().optional(),
+  create: z.boolean().optional(),
+});
+
+const PlaceCardsSchema = RoomIdSchema.extend({
+  placements: z.array(z.object({
+    card: CardSchema,
+    row: z.enum(['top', 'middle', 'bottom']),
+  })),
+  discard: CardSchema.optional(),
+});
+
+interface PlaceCardsRequest {
+  roomId: string;
+  placements: Array<{ card: Card; row: Row }>;
+  discard?: Card;
+}
+
+function extractRoomId(data: unknown): string {
+  const result = RoomIdSchema.safeParse(data);
+  if (!result.success) {
     throw new HttpsError('invalid-argument', 'Must provide roomId.');
   }
-  return roomId;
+  return result.data.roomId;
+}
+
+/** Validate and parse placeCards request. Safe cast: zod has validated shapes. */
+function parsePlaceCardsRequest(data: unknown): PlaceCardsRequest {
+  const result = PlaceCardsSchema.safeParse(data);
+  if (!result.success) {
+    throw new HttpsError('invalid-argument', 'Invalid request: must provide roomId and placements array.');
+  }
+  return result.data as unknown as PlaceCardsRequest;
+}
+
+function newPlayerState(uid: string, displayName: string): PlayerState {
+  return {
+    uid,
+    displayName,
+    board: emptyBoard(),
+    currentHand: [],
+    disconnected: false,
+    fouled: false,
+    score: 0,
+  };
 }
 
 // ---- removePlayer (inlined from former game-manager.ts) ----
@@ -33,18 +81,16 @@ async function removePlayer(uid: string, roomId: string): Promise<void> {
     const snap = await tx.get(gameRef);
     if (!snap.exists) return;
 
-    const game = snap.data()!;
-    const players = game.players as Record<string, Record<string, unknown>>;
-    const playerOrder = game.playerOrder as string[];
-    const hostUid = game.hostUid as string;
+    const game = parseGameState(snap.data());
 
-    if (!players[uid]) return;
+    if (!game.players[uid]) return;
 
     // Remove from players map
+    const players = { ...game.players };
     delete players[uid];
 
     // Remove from playerOrder
-    const newPlayerOrder = playerOrder.filter((u) => u !== uid);
+    const newPlayerOrder = game.playerOrder.filter((u) => u !== uid);
 
     // Clean up subcollection docs
     tx.delete(db().doc(handDoc(uid, roomId)));
@@ -57,12 +103,12 @@ async function removePlayer(uid: string, roomId: string): Promise<void> {
     }
 
     // If leaving player is host, promote next player in playerOrder
-    const updates: { players: typeof players; playerOrder: string[]; updatedAt: number; hostUid?: string } = {
+    const updates: { players: Record<string, PlayerState>; playerOrder: string[]; updatedAt: number; hostUid?: string } = {
       players,
       playerOrder: newPlayerOrder,
       updatedAt: Date.now(),
     };
-    if (uid === hostUid && newPlayerOrder.length > 0) {
+    if (uid === game.hostUid && newPlayerOrder.length > 0) {
       updates.hostUid = newPlayerOrder[0];
     }
 
@@ -78,9 +124,12 @@ export const joinGame = onCall({ maxInstances: 10 }, async (request) => {
     throw new HttpsError('unauthenticated', 'Must be signed in to join.');
   }
 
-  const roomId = extractRoomId(request.data as Record<string, unknown>);
-  const displayName = (request.data?.displayName as string) || `Player_${uid.slice(0, 6)}`;
-  const create = !!(request.data as Record<string, unknown>)?.create;
+  const parsed = JoinGameSchema.safeParse(request.data);
+  if (!parsed.success) {
+    throw new HttpsError('invalid-argument', 'Invalid request data.');
+  }
+  const { roomId, create } = parsed.data;
+  const displayName = parsed.data.displayName || `Player_${uid.slice(0, 6)}`;
   const gameRef = db().doc(gameDoc(roomId));
 
   await db().runTransaction(async (tx) => {
@@ -93,16 +142,8 @@ export const joinGame = onCall({ maxInstances: 10 }, async (request) => {
       }
 
       // Create fresh game document — this player becomes host
-      const players: Record<string, unknown> = {};
-      players[uid] = {
-        uid,
-        displayName,
-        board: emptyBoard(),
-        currentHand: [],
-        disconnected: false,
-        fouled: false,
-        score: 0,
-      };
+      const players: Record<string, PlayerState> = {};
+      players[uid] = newPlayerState(uid, displayName);
 
       tx.set(gameRef, {
         gameId: roomId,
@@ -118,31 +159,21 @@ export const joinGame = onCall({ maxInstances: 10 }, async (request) => {
         phaseDeadline: null,
       });
     } else {
-      const game = snap.data()!;
-      const players = game.players as Record<string, Record<string, unknown>>;
-      const playerOrder = game.playerOrder as string[];
-      const phase = game.phase as string;
+      const game = parseGameState(snap.data());
 
       // Already in game — no-op
-      if (players[uid]) return;
+      if (game.players[uid]) return;
 
-      if (Object.keys(players).length >= MAX_PLAYERS) {
+      if (Object.keys(game.players).length >= MAX_PLAYERS) {
         throw new HttpsError('resource-exhausted', `Room is full (max ${MAX_PLAYERS} players).`);
       }
 
-      (players as Record<string, unknown>)[uid] = {
-        uid,
-        displayName,
-        board: emptyBoard(),
-        currentHand: [],
-        disconnected: false,
-        fouled: false,
-        score: 0,
-      };
+      const players = { ...game.players };
+      players[uid] = newPlayerState(uid, displayName);
 
-      if (phase === GP.Lobby || phase === GP.MatchComplete) {
+      if (game.phase === GP.Lobby || game.phase === GP.MatchComplete) {
         // Join as active player
-        playerOrder.push(uid);
+        const playerOrder = [...game.playerOrder, uid];
         tx.update(gameRef, {
           players,
           playerOrder,
@@ -171,7 +202,7 @@ export const leaveGame = onCall({ maxInstances: 10 }, async (request) => {
     throw new HttpsError('unauthenticated', 'Must be signed in.');
   }
 
-  const roomId = extractRoomId(request.data as Record<string, unknown>);
+  const roomId = extractRoomId(request.data);
   await removePlayer(uid, roomId);
 
   // Dealer will detect the state change via onSnapshot and advance if needed
@@ -181,24 +212,13 @@ export const leaveGame = onCall({ maxInstances: 10 }, async (request) => {
 
 // ---- placeCards ----
 
-interface PlaceCardsData {
-  roomId: string;
-  placements: Array<{ card: Card; row: Row }>;
-  discard?: Card;
-}
-
 export const placeCards = onCall({ maxInstances: 10 }, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) {
     throw new HttpsError('unauthenticated', 'Must be signed in.');
   }
 
-  const data = request.data as PlaceCardsData;
-  const roomId = extractRoomId(data as unknown as Record<string, unknown>);
-
-  if (!data?.placements || !Array.isArray(data.placements)) {
-    throw new HttpsError('invalid-argument', 'Must provide placements array.');
-  }
+  const { roomId, placements, discard } = parsePlaceCardsRequest(request.data);
 
   const gameRef = db().doc(gameDoc(roomId));
 
@@ -208,17 +228,15 @@ export const placeCards = onCall({ maxInstances: 10 }, async (request) => {
       throw new HttpsError('not-found', 'No game exists.');
     }
 
-    const game = snap.data()!;
-    const phase = game.phase as GamePhase;
-    const street = game.street as number;
+    const game = parseGameState(snap.data());
 
     // Must be in a placement phase
     if (
-      phase !== GP.InitialDeal &&
-      phase !== GP.Street2 &&
-      phase !== GP.Street3 &&
-      phase !== GP.Street4 &&
-      phase !== GP.Street5
+      game.phase !== GP.InitialDeal &&
+      game.phase !== GP.Street2 &&
+      game.phase !== GP.Street3 &&
+      game.phase !== GP.Street4 &&
+      game.phase !== GP.Street5
     ) {
       throw new HttpsError(
         'failed-precondition',
@@ -226,19 +244,16 @@ export const placeCards = onCall({ maxInstances: 10 }, async (request) => {
       );
     }
 
-    const players = game.players as Record<string, Record<string, unknown>>;
-    const player = players[uid];
+    const player = game.players[uid];
     if (!player) {
       throw new HttpsError('not-found', 'You are not in this game.');
     }
 
-    const playerOrder = game.playerOrder as string[];
-    if (!playerOrder.includes(uid)) {
+    if (!game.playerOrder.includes(uid)) {
       throw new HttpsError('failed-precondition', 'Observers cannot place cards.');
     }
 
-    const hand = player.currentHand as Card[];
-    if (hand.length === 0) {
+    if (player.currentHand.length === 0) {
       throw new HttpsError(
         'failed-precondition',
         'You have already placed your cards this street.',
@@ -246,31 +261,31 @@ export const placeCards = onCall({ maxInstances: 10 }, async (request) => {
     }
 
     // Validate placement count
-    if (street === 1) {
-      if (data.placements.length !== INITIAL_DEAL_COUNT) {
+    if (game.street === 1) {
+      if (placements.length !== INITIAL_DEAL_COUNT) {
         throw new HttpsError(
           'invalid-argument',
           `Must place exactly ${INITIAL_DEAL_COUNT} cards on initial street.`,
         );
       }
     } else {
-      if (data.placements.length !== STREET_PLACE_COUNT) {
+      if (placements.length !== STREET_PLACE_COUNT) {
         throw new HttpsError(
           'invalid-argument',
           `Must place exactly ${STREET_PLACE_COUNT} cards on this street.`,
         );
       }
-      if (!data.discard) {
+      if (!discard) {
         throw new HttpsError('invalid-argument', 'Must discard 1 card.');
       }
     }
 
     // Validate all placed/discarded cards are in hand
-    const allCards = [...data.placements.map((p) => p.card)];
-    if (data.discard) allCards.push(data.discard);
+    const allCards: Card[] = [...placements.map((p) => p.card)];
+    if (discard) allCards.push(discard);
 
     for (const card of allCards) {
-      const inHand = hand.some(
+      const inHand = player.currentHand.some(
         (h) => h.suit === card.suit && h.rank === card.rank,
       );
       if (!inHand) {
@@ -282,14 +297,13 @@ export const placeCards = onCall({ maxInstances: 10 }, async (request) => {
     }
 
     // Validate row capacities
-    const board = player.board as Board;
     const newBoard: Board = {
-      top: [...board.top],
-      middle: [...board.middle],
-      bottom: [...board.bottom],
+      top: [...player.board.top],
+      middle: [...player.board.middle],
+      bottom: [...player.board.bottom],
     };
 
-    for (const placement of data.placements) {
+    for (const placement of placements) {
       const row = placement.row;
       const maxSize = row === 'top' ? TOP_ROW_SIZE : FIVE_CARD_ROW_SIZE;
       if (newBoard[row].length >= maxSize) {
@@ -302,14 +316,15 @@ export const placeCards = onCall({ maxInstances: 10 }, async (request) => {
     }
 
     // Apply changes
-    players[uid] = {
+    const updatedPlayers = { ...game.players };
+    updatedPlayers[uid] = {
       ...player,
       board: newBoard,
       currentHand: [],
     };
 
     tx.update(gameRef, {
-      players,
+      players: updatedPlayers,
       updatedAt: Date.now(),
     });
 
@@ -330,7 +345,7 @@ export const startMatch = onCall({ maxInstances: 10 }, async (request) => {
     throw new HttpsError('unauthenticated', 'Must be signed in.');
   }
 
-  const roomId = extractRoomId(request.data as Record<string, unknown>);
+  const roomId = extractRoomId(request.data);
   const gameRef = db().doc(gameDoc(roomId));
 
   await db().runTransaction(async (tx) => {
@@ -339,7 +354,7 @@ export const startMatch = onCall({ maxInstances: 10 }, async (request) => {
       throw new HttpsError('not-found', 'No game exists.');
     }
 
-    const game = snap.data()!;
+    const game = parseGameState(snap.data());
 
     if (game.hostUid !== uid) {
       throw new HttpsError('permission-denied', 'Only the host can start the match.');
@@ -347,12 +362,11 @@ export const startMatch = onCall({ maxInstances: 10 }, async (request) => {
     if (game.phase !== GP.Lobby) {
       throw new HttpsError('failed-precondition', 'Game is not in lobby phase.');
     }
-    if ((game.round as number) !== 0) {
+    if (game.round !== 0) {
       throw new HttpsError('failed-precondition', 'Match has already been started.');
     }
 
-    const playerOrder = game.playerOrder as string[];
-    if (playerOrder.length < 2) {
+    if (game.playerOrder.length < 2) {
       throw new HttpsError('failed-precondition', 'Need at least 2 players to start.');
     }
 
@@ -374,7 +388,7 @@ export const playAgain = onCall({ maxInstances: 10 }, async (request) => {
     throw new HttpsError('unauthenticated', 'Must be signed in.');
   }
 
-  const roomId = extractRoomId(request.data as Record<string, unknown>);
+  const roomId = extractRoomId(request.data);
   const gameRef = db().doc(gameDoc(roomId));
 
   await db().runTransaction(async (tx) => {
@@ -383,7 +397,7 @@ export const playAgain = onCall({ maxInstances: 10 }, async (request) => {
       throw new HttpsError('not-found', 'No game exists.');
     }
 
-    const game = snap.data()!;
+    const game = parseGameState(snap.data());
 
     if (game.hostUid !== uid) {
       throw new HttpsError('permission-denied', 'Only the host can restart.');
@@ -392,15 +406,13 @@ export const playAgain = onCall({ maxInstances: 10 }, async (request) => {
       throw new HttpsError('failed-precondition', 'Match is not complete.');
     }
 
-    const players = game.players as Record<string, Record<string, unknown>>;
-
     // Reset all players: scores to 0, boards/hands cleared
-    const updatedPlayers: Record<string, unknown> = {};
+    const updatedPlayers: Record<string, PlayerState> = {};
     const updatedPlayerOrder: string[] = [];
 
-    for (const pUid of Object.keys(players)) {
+    for (const pUid of Object.keys(game.players)) {
       updatedPlayers[pUid] = {
-        ...players[pUid],
+        ...game.players[pUid],
         board: emptyBoard(),
         currentHand: [],
         fouled: false,
