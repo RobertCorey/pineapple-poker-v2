@@ -21,6 +21,7 @@ import { scoreAllPlayers, isFoul } from '../../shared/game-logic/scoring';
 import { gameDoc, handDoc, deckDoc } from '../../shared/core/firestore-paths';
 import { emptyBoard, phaseForStreet } from '../../shared/game-logic/board-utils';
 import { parseGameState, parseDeckDoc } from '../../shared/core/schemas';
+import { botPlaceInitialDeal, botPlaceStreet } from './bot-strategy';
 
 // ---- Helper: all active (non-fouled) players have placed their cards ----
 function allActivePlaced(
@@ -407,6 +408,79 @@ function autoPlaceCards(cards: Card[], board: Board, count: number): void {
       placed++;
     }
   }
+}
+
+/**
+ * Auto-place cards for all bot players who have cards in hand.
+ * Uses the bot strategy to make intelligent placement decisions.
+ */
+export async function placeBotCards(db: Firestore, roomId: string): Promise<boolean> {
+  const gameRef = db.doc(gameDoc(roomId));
+
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(gameRef);
+    if (!snap.exists) return false;
+
+    const game = parseGameState(snap.data());
+
+    // Only act during placement phases
+    if (
+      game.phase !== GP.InitialDeal &&
+      game.phase !== GP.Street2 &&
+      game.phase !== GP.Street3 &&
+      game.phase !== GP.Street4 &&
+      game.phase !== GP.Street5
+    ) return false;
+
+    const updatedPlayers: Record<string, PlayerState> = { ...game.players };
+    let changed = false;
+
+    for (const uid of game.playerOrder) {
+      const player = game.players[uid];
+
+      // Only act on bot players with cards to place
+      if (!player.isBot) continue;
+      if (player.currentHand.length === 0) continue;
+      if (player.fouled) continue;
+
+      let decision;
+      if (game.street === 1) {
+        decision = botPlaceInitialDeal(player.currentHand, player.board);
+      } else {
+        decision = botPlaceStreet(player.currentHand, player.board);
+      }
+
+      // Apply placements
+      const newBoard: Board = {
+        top: [...player.board.top],
+        middle: [...player.board.middle],
+        bottom: [...player.board.bottom],
+      };
+
+      for (const p of decision.placements) {
+        newBoard[p.row] = [...newBoard[p.row], p.card];
+      }
+
+      updatedPlayers[uid] = {
+        ...player,
+        board: newBoard,
+        currentHand: [],
+      };
+
+      tx.set(db.doc(handDoc(uid, roomId)), { cards: [] });
+      changed = true;
+      console.log(`[Dealer] [${roomId}] Bot ${player.displayName} placed cards`);
+    }
+
+    if (changed) {
+      tx.update(gameRef, {
+        players: updatedPlayers,
+        updatedAt: Date.now(),
+      });
+    }
+
+    return changed;
+  });
 }
 
 /**

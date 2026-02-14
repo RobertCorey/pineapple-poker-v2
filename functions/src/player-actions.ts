@@ -15,6 +15,7 @@ import {
 import { gameDoc, handDoc, deckDoc } from '../../shared/core/firestore-paths';
 import { emptyBoard } from '../../shared/game-logic/board-utils';
 import { parseGameState, CardSchema } from '../../shared/core/schemas';
+import { pickBotName } from '../../shared/core/bot-names';
 
 const db = () => admin.firestore();
 
@@ -429,6 +430,130 @@ export const playAgain = onCall({ maxInstances: 10 }, async (request) => {
       playerOrder: updatedPlayerOrder,
       roundResults: FieldValue.delete(),
       phaseDeadline: null,
+      updatedAt: Date.now(),
+    });
+  });
+
+  return { success: true };
+});
+
+// ---- addBot ----
+
+export const addBot = onCall({ maxInstances: 10 }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError('unauthenticated', 'Must be signed in.');
+  }
+
+  const roomId = extractRoomId(request.data);
+  const gameRef = db().doc(gameDoc(roomId));
+
+  let botDisplayName = '';
+
+  await db().runTransaction(async (tx) => {
+    const snap = await tx.get(gameRef);
+    if (!snap.exists) {
+      throw new HttpsError('not-found', 'Room not found.');
+    }
+
+    const game = parseGameState(snap.data());
+
+    if (game.hostUid !== uid) {
+      throw new HttpsError('permission-denied', 'Only the host can add bots.');
+    }
+    if (game.phase !== GP.Lobby) {
+      throw new HttpsError('failed-precondition', 'Can only add bots in lobby.');
+    }
+
+    if (Object.keys(game.players).length >= MAX_PLAYERS) {
+      throw new HttpsError('resource-exhausted', `Room is full (max ${MAX_PLAYERS} players).`);
+    }
+
+    // Collect names already used by bots
+    const usedNames = new Set<string>();
+    for (const p of Object.values(game.players)) {
+      if (p.isBot) usedNames.add(p.displayName);
+    }
+
+    const { nickname, fullName } = pickBotName(usedNames);
+    botDisplayName = `${nickname} (${fullName})`;
+
+    // Generate a unique bot uid
+    const botUid = `bot_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+    const players = { ...game.players };
+    players[botUid] = {
+      uid: botUid,
+      displayName: botDisplayName,
+      board: emptyBoard(),
+      currentHand: [],
+      disconnected: false,
+      fouled: false,
+      score: 0,
+      isBot: true,
+    };
+
+    const playerOrder = [...game.playerOrder, botUid];
+
+    tx.update(gameRef, {
+      players,
+      playerOrder,
+      updatedAt: Date.now(),
+    });
+  });
+
+  return { success: true, displayName: botDisplayName };
+});
+
+// ---- removeBot ----
+
+const RemoveBotSchema = RoomIdSchema.extend({
+  botUid: z.string().min(1, 'Must provide botUid.'),
+});
+
+export const removeBot = onCall({ maxInstances: 10 }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError('unauthenticated', 'Must be signed in.');
+  }
+
+  const parsed = RemoveBotSchema.safeParse(request.data);
+  if (!parsed.success) {
+    throw new HttpsError('invalid-argument', 'Must provide roomId and botUid.');
+  }
+  const { roomId, botUid } = parsed.data;
+
+  const gameRef = db().doc(gameDoc(roomId));
+
+  await db().runTransaction(async (tx) => {
+    const snap = await tx.get(gameRef);
+    if (!snap.exists) {
+      throw new HttpsError('not-found', 'Room not found.');
+    }
+
+    const game = parseGameState(snap.data());
+
+    if (game.hostUid !== uid) {
+      throw new HttpsError('permission-denied', 'Only the host can remove bots.');
+    }
+
+    const bot = game.players[botUid];
+    if (!bot || !bot.isBot) {
+      throw new HttpsError('not-found', 'Bot not found.');
+    }
+
+    const players = { ...game.players };
+    delete players[botUid];
+
+    const playerOrder = game.playerOrder.filter((u) => u !== botUid);
+
+    // Clean up subcollection docs
+    tx.delete(db().doc(handDoc(botUid, roomId)));
+    tx.delete(db().doc(deckDoc(botUid, roomId)));
+
+    tx.update(gameRef, {
+      players,
+      playerOrder,
       updatedAt: Date.now(),
     });
   });
