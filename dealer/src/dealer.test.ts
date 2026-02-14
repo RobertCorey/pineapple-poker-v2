@@ -64,6 +64,19 @@ function createMockFirestore() {
 
 // ---- Helpers ----
 
+function makePlayer(uid: string, overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    uid,
+    displayName: uid,
+    board: { top: [], middle: [], bottom: [] },
+    currentHand: [],
+    disconnected: false,
+    fouled: false,
+    score: 0,
+    ...overrides,
+  };
+}
+
 function gameState(overrides: Partial<{
   phase: string;
   street: number;
@@ -72,8 +85,10 @@ function gameState(overrides: Partial<{
   playerOrder: string[];
   players: Record<string, unknown>;
   phaseDeadline: number | null;
+  hostUid: string;
 }> = {}): Record<string, unknown> {
   return {
+    gameId: 'TEST',
     phase: 'lobby',
     street: 0,
     round: 0,
@@ -81,6 +96,9 @@ function gameState(overrides: Partial<{
     playerOrder: [],
     players: {},
     phaseDeadline: null,
+    hostUid: 'p1',
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
     ...overrides,
   };
 }
@@ -99,8 +117,8 @@ function placementPhaseState(opts: {
     round: 1,
     playerOrder: ['p1', 'p2'],
     players: {
-      p1: { uid: 'p1', currentHand: hand, fouled: false, board: { top: [], middle: [], bottom: [] } },
-      p2: { uid: 'p2', currentHand: [], fouled: false, board: { top: [], middle: [], bottom: [] } },
+      p1: makePlayer('p1', { currentHand: hand }),
+      p2: makePlayer('p2'),
     },
     phaseDeadline: deadline,
   });

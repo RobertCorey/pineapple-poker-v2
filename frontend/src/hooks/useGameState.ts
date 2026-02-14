@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase.ts';
 import type { GameState } from '@shared/core/types';
+import { parseGameState } from '@shared/core/schemas';
 
 export function useGameState(roomId: string | null) {
   const [gameState, setGameState] = useState<GameState | null>(null);
@@ -26,7 +27,7 @@ export function useGameState(roomId: string | null) {
       doc(db, 'games', roomId),
       (snap) => {
         if (snap.exists()) {
-          setGameState(snap.data() as GameState);
+          setGameState(parseGameState(snap.data()));
         } else {
           setGameState(null);
         }
