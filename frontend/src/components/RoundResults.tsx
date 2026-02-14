@@ -1,5 +1,6 @@
 import type { GameState } from '@shared/core/types';
 import { scorePairwise } from '@shared/game-logic/scoring';
+import { ScoreReveal } from './ScoreReveal.tsx';
 
 interface RoundResultsProps {
   gameState: GameState;
@@ -21,13 +22,17 @@ function pairwiseLabel(rowPoints: number, scoopBonus: number, total: number, aFo
 export function RoundResults({ gameState, currentUid, onClose }: RoundResultsProps) {
   const players = gameState.playerOrder.map((uid) => gameState.players[uid]).filter(Boolean);
   const roundResults = gameState.roundResults ?? {};
+  const myRoundScore = roundResults[currentUid]?.netScore ?? 0;
 
   return (
     <div data-testid="round-results" className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 font-mono">
       <div className="bg-gray-900 border border-gray-700 p-4 max-w-md w-full mx-4">
-        <h2 className="text-sm font-bold text-white mb-3 text-center">
+        <h2 className="text-sm font-bold text-white mb-1 text-center">
           Round {gameState.round} of {gameState.totalRounds} Complete
         </h2>
+
+        {/* Animated score reveal */}
+        <ScoreReveal score={myRoundScore} />
 
         <table className="w-full text-xs mb-3">
           <thead>

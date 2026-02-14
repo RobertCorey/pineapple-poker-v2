@@ -1,5 +1,6 @@
 import type { GameState } from '@shared/core/types';
 import { scorePairwise } from '@shared/game-logic/scoring';
+import { ScoreReveal } from '../ScoreReveal.tsx';
 
 interface MobileRoundOverlayProps {
   gameState: GameState;
@@ -20,12 +21,18 @@ function pairwiseLabel(rowPoints: number, scoopBonus: number, total: number, aFo
 export function MobileRoundOverlay({ gameState, currentUid }: MobileRoundOverlayProps) {
   const players = gameState.playerOrder.map((uid) => gameState.players[uid]).filter(Boolean);
   const roundResults = gameState.roundResults ?? {};
+  const myRoundScore = roundResults[currentUid]?.netScore ?? 0;
 
   return (
     <div data-testid="mobile-round-overlay" className="fixed inset-0 bg-gray-900 z-50 flex flex-col items-center justify-center px-6 font-mono">
-      <h2 className="text-lg font-bold text-white mb-6">
+      <h2 className="text-lg font-bold text-white mb-2">
         Round {gameState.round}/{gameState.totalRounds}
       </h2>
+
+      {/* Animated score reveal */}
+      <div className="mb-4">
+        <ScoreReveal score={myRoundScore} />
+      </div>
 
       {/* Score table */}
       <div className="w-full max-w-sm mb-6">

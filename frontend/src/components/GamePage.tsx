@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import type { GameState, Card, Row, Board } from '@shared/core/types';
 import { GamePhase } from '@shared/core/types';
@@ -9,6 +9,7 @@ import { RoundResults } from './RoundResults.tsx';
 import { MatchResults } from './MatchResults.tsx';
 import { DebugPanel } from './DebugPanel.tsx';
 import { useCountdown } from '../hooks/useCountdown.ts';
+import { soundEngine } from '../audio/SoundEngine.ts';
 
 function cardKey(c: Card): string {
   return `${c.rank}-${c.suit}`;
@@ -51,6 +52,19 @@ export function GamePage({ gameState, hand, uid, roomId, onLeaveRoom }: GamePage
     gameState.phase === GamePhase.Street4 ||
     gameState.phase === GamePhase.Street5
   );
+
+  // Timer tick sounds
+  const prevCountdown = useRef(countdown);
+  useEffect(() => {
+    if (countdown !== prevCountdown.current && showTimer && countdown > 0) {
+      if (countdown <= 5) {
+        soundEngine.playTimerCritical();
+      } else if (countdown <= 10) {
+        soundEngine.playTimerTick();
+      }
+    }
+    prevCountdown.current = countdown;
+  }, [countdown, showTimer]);
 
   const isRoundComplete = gameState.phase === GamePhase.Complete;
   const isMatchComplete = gameState.phase === GamePhase.MatchComplete;
@@ -116,6 +130,7 @@ export function GamePage({ gameState, hand, uid, roomId, onLeaveRoom }: GamePage
     const newPlacements = [...placements, { card, row }];
     setPlacements(newPlacements);
     setSelectedIndex(null);
+    soundEngine.playCardPlace();
 
     // Auto-submit when all required placements are made
     if (newPlacements.length === requiredPlacements) {

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import type { GameState, Card, Row, Board } from '@shared/core/types';
 import { GamePhase } from '@shared/core/types';
@@ -9,6 +9,7 @@ import { MobileOpponentGrid } from './MobileOpponentGrid.tsx';
 import { MobileHandArea } from './MobileHandArea.tsx';
 import { MobileRoundOverlay } from './MobileRoundOverlay.tsx';
 import { MobileMatchOverlay } from './MobileMatchOverlay.tsx';
+import { soundEngine } from '../../audio/SoundEngine.ts';
 
 function cardKey(c: Card): string {
   return `${c.rank}-${c.suit}`;
@@ -49,6 +50,19 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
     gameState.phase === GamePhase.Street4 ||
     gameState.phase === GamePhase.Street5
   );
+
+  // Timer tick sounds
+  const prevCountdown = useRef(countdown);
+  useEffect(() => {
+    if (countdown !== prevCountdown.current && showTimer && countdown > 0) {
+      if (countdown <= 5) {
+        soundEngine.playTimerCritical();
+      } else if (countdown <= 10) {
+        soundEngine.playTimerTick();
+      }
+    }
+    prevCountdown.current = countdown;
+  }, [countdown, showTimer]);
 
   const isRoundComplete = gameState.phase === GamePhase.Complete;
   const isMatchComplete = gameState.phase === GamePhase.MatchComplete;
@@ -106,6 +120,7 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
     const newPlacements = [...placements, { card, row }];
     setPlacements(newPlacements);
     setSelectedIndex(null);
+    soundEngine.playCardPlace();
 
     if (newPlacements.length === requiredPlacements) {
       setSubmitting(true);

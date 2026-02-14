@@ -3,6 +3,7 @@ import { httpsCallable } from 'firebase/functions';
 import type { GameState } from '@shared/core/types';
 import { scorePairwise } from '@shared/game-logic/scoring';
 import { functions } from '../firebase.ts';
+import { ScoreReveal } from './ScoreReveal.tsx';
 
 interface MatchResultsProps {
   gameState: GameState;
@@ -49,10 +50,15 @@ export function MatchResults({ gameState, currentUid, roomId }: MatchResultsProp
     }
   }, [roomId]);
 
+  const myFinalRoundScore = roundResults[currentUid]?.netScore ?? 0;
+
   return (
     <div data-testid="match-results" className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 font-mono">
-      <div className="bg-gray-900 border border-gray-700 p-4 max-w-md w-full mx-4">
-        <h2 className="text-sm font-bold text-white mb-3 text-center">Match Complete</h2>
+      <div className="bg-gray-900 border border-gray-700 p-4 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <h2 className="text-sm font-bold text-white mb-1 text-center">Match Complete</h2>
+
+        {/* Animated score reveal for final round */}
+        <ScoreReveal score={myFinalRoundScore} compact />
 
         {/* Final round breakdown */}
         {Object.keys(roundResults).length > 0 && (
