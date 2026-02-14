@@ -2,9 +2,11 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from './hooks/useAuth.ts';
 import { useGameState } from './hooks/useGameState.ts';
 import { usePlayerHand } from './hooks/usePlayerHand.ts';
+import { useIsMobile } from './hooks/useIsMobile.ts';
 import { RoomSelector } from './components/RoomSelector.tsx';
 import { Lobby } from './components/Lobby.tsx';
 import { GamePage } from './components/GamePage.tsx';
+import { MobileGamePage } from './components/mobile/MobileGamePage.tsx';
 import { GamePhase } from '@shared/core/types';
 
 function getRoomFromUrl(): string | null {
@@ -27,6 +29,7 @@ function App() {
   const [roomId, setRoomId] = useState<string | null>(getRoomFromUrl);
   const { gameState, loading: gameLoading } = useGameState(roomId);
   const hand = usePlayerHand(user?.uid, roomId);
+  const isMobile = useIsMobile();
 
   // Sync URL on popstate (back/forward)
   useEffect(() => {
@@ -86,6 +89,18 @@ function App() {
         signIn={signIn}
         gameState={gameState}
         isInGame={!!isInGame}
+        roomId={roomId}
+        onLeaveRoom={handleLeaveRoom}
+      />
+    );
+  }
+
+  if (isMobile) {
+    return (
+      <MobileGamePage
+        gameState={gameState}
+        hand={hand}
+        uid={user.uid}
         roomId={roomId}
         onLeaveRoom={handleLeaveRoom}
       />

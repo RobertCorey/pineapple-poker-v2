@@ -5,12 +5,14 @@ import { CardComponent } from './CardComponent.tsx';
 import type { CardSize } from './CardComponent.tsx';
 
 const SPACER_W: Record<CardSize, string> = {
+  xs: 'w-6',
   sm: 'w-8',
   md: 'w-10',
   lg: 'w-14',
 };
 
 const EMPTY_SLOT: Record<CardSize, string> = {
+  xs: 'w-6 h-8 rounded-sm',
   sm: 'w-8 h-11 rounded',
   md: 'w-10 h-14 rounded-md',
   lg: 'w-14 h-20 rounded-lg',
