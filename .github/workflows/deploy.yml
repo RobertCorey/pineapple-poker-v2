@@ -119,9 +119,17 @@ jobs:
         env:
           VM_IP: ${{ secrets.GCE_VM_IP }}
         run: |
-          sleep 3
-          ssh -i ~/.ssh/deploy_key deploy@${VM_IP} \
-            "curl -sf http://localhost:8080/health"
+          for i in 1 2 3 4 5; do
+            sleep 3
+            if ssh -i ~/.ssh/deploy_key deploy@${VM_IP} \
+              "curl -sf http://localhost:8080/health"; then
+              echo "Dealer is healthy"
+              exit 0
+            fi
+            echo "Attempt $i failed, retrying..."
+          done
+          echo "Dealer health check failed after 5 attempts"
+          exit 1
 
       - name: Clean up SSH key
         if: always()
@@ -140,6 +148,18 @@ jobs:
           cache: npm
 
       - run: npm ci
+
+      - name: Verify dealer is healthy
+        env:
+          VM_IP: ${{ secrets.GCE_VM_IP }}
+        run: |
+          mkdir -p ~/.ssh
+          echo '${{ secrets.GCE_SSH_PRIVATE_KEY }}' > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${VM_IP} >> ~/.ssh/known_hosts 2>/dev/null
+          ssh -i ~/.ssh/deploy_key deploy@${VM_IP} \
+            "curl -sf http://localhost:8080/health"
+          rm -f ~/.ssh/deploy_key
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
