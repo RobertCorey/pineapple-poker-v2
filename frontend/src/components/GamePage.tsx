@@ -8,7 +8,9 @@ import { HandPanel } from './HandPanel.tsx';
 import { RoundResults } from './RoundResults.tsx';
 import { MatchResults } from './MatchResults.tsx';
 import { DebugPanel } from './DebugPanel.tsx';
+import { MuteButton } from './MuteButton.tsx';
 import { useCountdown } from '../hooks/useCountdown.ts';
+import { scoringAudio } from '../audio/ScoringAudio.ts';
 
 function cardKey(c: Card): string {
   return `${c.rank}-${c.suit}`;
@@ -133,7 +135,7 @@ export function GamePage({ gameState, hand, uid, roomId, onLeaveRoom }: GamePage
           : null;
 
         const placeCardsFn = httpsCallable(functions, 'placeCards');
-        await placeCardsFn({ roomId, placements: placementData, discard });
+        await placeCardsFn({ roomId, placements: placementData, ...(discard ? { discard } : {}) });
         // Don't clear placements here — they persist until the phase-change
         // cleanup (line 70-74). The dedup logic in mergedBoard ensures no
         // double-counting once the Firestore board snapshot arrives.
@@ -166,7 +168,7 @@ export function GamePage({ gameState, hand, uid, roomId, onLeaveRoom }: GamePage
   const isObserver = !gameState.playerOrder.includes(uid);
 
   return (
-    <div className="h-screen bg-gray-900 text-white font-mono flex flex-col overflow-hidden">
+    <div className="h-screen bg-gray-900 text-white font-mono flex flex-col overflow-hidden" onClick={() => scoringAudio.init()} onKeyDown={() => scoringAudio.init()}>
       {/* Header bar */}
       <div className="border-b border-gray-700 px-3 py-2 flex items-center justify-between text-xs flex-shrink-0">
         <span className="font-bold">Pineapple Poker</span>
@@ -183,6 +185,7 @@ export function GamePage({ gameState, hand, uid, roomId, onLeaveRoom }: GamePage
           <span className="text-gray-500">
             {gameState.playerOrder.length} playing, {Object.keys(gameState.players).length} total
           </span>
+          <MuteButton />
           <button
             onClick={() => setDebugOpen((o) => !o)}
             className={`px-2 py-1 text-xs border ${debugOpen ? 'bg-yellow-900 border-yellow-700 text-yellow-300' : 'bg-gray-800 border-gray-600 text-gray-400'}`}

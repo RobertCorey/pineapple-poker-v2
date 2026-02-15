@@ -9,6 +9,8 @@ import { MobileOpponentGrid } from './MobileOpponentGrid.tsx';
 import { MobileHandArea } from './MobileHandArea.tsx';
 import { MobileRoundOverlay } from './MobileRoundOverlay.tsx';
 import { MobileMatchOverlay } from './MobileMatchOverlay.tsx';
+import { MuteButton } from '../MuteButton.tsx';
+import { scoringAudio } from '../../audio/ScoringAudio.ts';
 
 function cardKey(c: Card): string {
   return `${c.rank}-${c.suit}`;
@@ -121,7 +123,7 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
           : null;
 
         const placeCardsFn = httpsCallable(functions, 'placeCards');
-        await placeCardsFn({ roomId, placements: placementData, discard });
+        await placeCardsFn({ roomId, placements: placementData, ...(discard ? { discard } : {}) });
       } catch (err) {
         console.error('Failed to place cards:', err);
         setToast('Failed to place cards');
@@ -149,7 +151,7 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
   const expectedCards = gameState.street === 1 ? 5 : 3 + 2 * gameState.street;
 
   return (
-    <div className="h-[100dvh] bg-gray-900 text-white font-mono flex flex-col overflow-hidden">
+    <div className="h-[100dvh] bg-gray-900 text-white font-mono flex flex-col overflow-hidden" onClick={() => scoringAudio.init()} onKeyDown={() => scoringAudio.init()}>
       {/* Compact mobile header */}
       <div className="border-b border-gray-700 px-2 py-1.5 flex items-center justify-between text-[10px] flex-shrink-0">
         <div className="flex items-center gap-2">
@@ -164,6 +166,7 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
           <span className="text-gray-500">
             R{gameState.round}/{gameState.totalRounds} S{gameState.street}
           </span>
+          <MuteButton />
           <button
             onClick={handleLeave}
             disabled={leaving}
