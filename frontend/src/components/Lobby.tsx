@@ -19,6 +19,7 @@ export function Lobby({ uid, displayName, setDisplayName, signIn, gameState, isI
   const [joining, setJoining] = useState(false);
   const [starting, setStarting] = useState(false);
   const [leaving, setLeaving] = useState(false);
+  const [addingBot, setAddingBot] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
@@ -72,6 +73,29 @@ export function Lobby({ uid, displayName, setDisplayName, signIn, gameState, isI
     }
   }, [roomId, onLeaveRoom]);
 
+  const handleAddBot = useCallback(async () => {
+    setAddingBot(true);
+    try {
+      const addBotFn = httpsCallable(functions, 'addBot');
+      await addBotFn({ roomId });
+    } catch (err) {
+      console.error('Failed to add bot:', err);
+      setToast('Failed to add bot');
+    } finally {
+      setAddingBot(false);
+    }
+  }, [roomId]);
+
+  const handleRemoveBot = useCallback(async (botUid: string) => {
+    try {
+      const removeBotFn = httpsCallable(functions, 'removeBot');
+      await removeBotFn({ roomId, botUid });
+    } catch (err) {
+      console.error('Failed to remove bot:', err);
+      setToast('Failed to remove bot');
+    }
+  }, [roomId]);
+
   // In-game lobby view (waiting for host to start)
   if (isInGame && gameState) {
     return (
@@ -88,11 +112,30 @@ export function Lobby({ uid, displayName, setDisplayName, signIn, gameState, isI
                 {p.uid === gameState.hostUid && <span className="text-yellow-400">&#9733;</span>}
                 {p.displayName}
                 {p.uid === uid && ' (you)'}
+                {p.isBot && <span className="text-cyan-400 text-[10px] border border-cyan-700 px-1 rounded">BOT</span>}
+                {p.isBot && isHost && (
+                  <button
+                    onClick={() => handleRemoveBot(p.uid)}
+                    className="text-red-500 hover:text-red-400 text-[10px] ml-1"
+                    title="Remove bot"
+                  >
+                    x
+                  </button>
+                )}
               </div>
             ))}
           </div>
 
           <div className="space-y-2">
+            {isHost && (
+              <button
+                onClick={handleAddBot}
+                disabled={addingBot}
+                className="w-full py-2 bg-cyan-800 hover:bg-cyan-700 disabled:bg-gray-700 disabled:text-gray-500 text-white text-sm"
+              >
+                {addingBot ? 'Adding...' : '+ Add Bot'}
+              </button>
+            )}
             {isHost ? (
               <button
                 data-testid="start-match-button"
@@ -164,9 +207,10 @@ export function Lobby({ uid, displayName, setDisplayName, signIn, gameState, isI
           <div className="mt-4 pt-3 border-t border-gray-700">
             <div className="text-xs text-gray-500 mb-2">Players at table ({players.length})</div>
             {players.map((p) => (
-              <div key={p.uid} className="text-xs text-gray-400 py-0.5">
+              <div key={p.uid} className="text-xs text-gray-400 py-0.5 flex items-center gap-1">
                 {p.displayName}
                 {p.uid === uid && ' (you)'}
+                {p.isBot && <span className="text-cyan-400 text-[10px] border border-cyan-700 px-1 rounded">BOT</span>}
               </div>
             ))}
           </div>

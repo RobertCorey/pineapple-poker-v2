@@ -61,6 +61,7 @@ export const PlayerStateSchema = z.object({
   disconnected: z.boolean(),
   fouled: z.boolean(),
   score: z.number(),
+  isBot: z.boolean().optional(),
 });
 
 // ---- Round results ----
