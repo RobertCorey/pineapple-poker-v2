@@ -476,7 +476,7 @@ export const addBot = onCall({ maxInstances: 10 }, async (request) => {
     }
 
     const { nickname, fullName } = pickBotName(usedNames);
-    botDisplayName = `${nickname} (${fullName})`;
+    botDisplayName = `${nickname} ${fullName}`;
 
     // Generate a unique bot uid
     const botUid = `bot_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;

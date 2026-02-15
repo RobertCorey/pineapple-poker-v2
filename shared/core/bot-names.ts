@@ -1,21 +1,21 @@
-/** Bot display names — old-time gambler nicknames. */
+/** Bot display names — fun gambling-themed nicknames. */
 export const BOT_NAMES: Array<{ nickname: string; fullName: string }> = [
-  { nickname: 'Amarillo Slim', fullName: 'Thomas Preston' },
-  { nickname: 'Texas Dolly', fullName: 'Doyle Brunson' },
-  { nickname: 'The Kid', fullName: 'Stu Ungar' },
-  { nickname: 'Sailor Roberts', fullName: 'Brian Roberts' },
-  { nickname: 'Puggy', fullName: 'Walter Pearson' },
-  { nickname: 'The Grand Old Man', fullName: 'Johnny Moss' },
-  { nickname: 'Treetop', fullName: 'Jack Straus' },
-  { nickname: 'Devilfish', fullName: 'Dave Ulliott' },
-  { nickname: 'The Orient Express', fullName: 'Johnny Chan' },
-  { nickname: 'Comeback Kid', fullName: 'Paul Darden' },
-  { nickname: 'Cigar', fullName: 'Crandell Addington' },
-  { nickname: 'No Home Jerome', fullName: 'Jerome Graham' },
-  { nickname: 'The Owl', fullName: 'Bobby Baldwin' },
-  { nickname: 'Action Dan', fullName: 'Dan Harrington' },
-  { nickname: 'The Mouth', fullName: 'Mike Matusow' },
-  { nickname: 'Unabomber', fullName: 'Phil Laak' },
+  { nickname: 'Degen', fullName: 'Darryl' },
+  { nickname: 'Coin Flip', fullName: 'Carl' },
+  { nickname: 'All-In', fullName: 'Alice' },
+  { nickname: 'Bad Beat', fullName: 'Bobby' },
+  { nickname: 'Tilt Master', fullName: 'Tony' },
+  { nickname: 'River Rat', fullName: 'Randy' },
+  { nickname: 'Pot Committed', fullName: 'Pete' },
+  { nickname: 'Double Down', fullName: 'Donna' },
+  { nickname: 'Whale', fullName: 'Walter' },
+  { nickname: 'Nit', fullName: 'Nancy' },
+  { nickname: 'Gutshot', fullName: 'Gary' },
+  { nickname: 'Sandbag', fullName: 'Sally' },
+  { nickname: 'Slowroll', fullName: 'Steve' },
+  { nickname: 'Railbird', fullName: 'Rita' },
+  { nickname: 'Busto', fullName: 'Benny' },
+  { nickname: 'Cooler', fullName: 'Cathy' },
 ];
 
 /** Pick a random bot name that isn't already taken by another bot in the game. */
