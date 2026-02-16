@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import { functions, trackEvent } from '../firebase.ts';
 import { generateRoomCode } from '../utils/roomCode.ts';
@@ -23,7 +23,7 @@ export function RoomSelector({ displayName, setDisplayName, signIn, onRoomJoined
     return () => clearTimeout(t);
   }, [toast]);
 
-  const handleCreate = useCallback(async () => {
+  const handleCreate = async () => {
     if (!nameInput.trim()) return;
     setCreating(true);
     try {
@@ -40,9 +40,9 @@ export function RoomSelector({ displayName, setDisplayName, signIn, onRoomJoined
     } finally {
       setCreating(false);
     }
-  }, [nameInput, setDisplayName, signIn, onRoomJoined]);
+  };
 
-  const handleJoin = useCallback(async () => {
+  const handleJoin = async () => {
     if (!nameInput.trim() || !roomCodeInput.trim()) return;
     setJoining(true);
     try {
@@ -59,7 +59,7 @@ export function RoomSelector({ displayName, setDisplayName, signIn, onRoomJoined
     } finally {
       setJoining(false);
     }
-  }, [nameInput, roomCodeInput, setDisplayName, signIn, onRoomJoined]);
+  };
 
   return (
     <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center font-mono">

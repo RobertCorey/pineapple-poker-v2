@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { signInAnonymously, onAuthStateChanged, type User } from 'firebase/auth';
 import { auth } from '../firebase.ts';
 
@@ -19,17 +19,17 @@ export function useAuth() {
     return unsub;
   }, []);
 
-  const signIn = useCallback(async () => {
+  const signIn = async () => {
     if (!auth.currentUser) {
       await signInAnonymously(auth);
     }
-  }, []);
+  };
 
-  const setDisplayName = useCallback((name: string) => {
+  const setDisplayName = (name: string) => {
     const trimmed = name.trim();
     setDisplayNameState(trimmed);
     localStorage.setItem(DISPLAY_NAME_KEY, trimmed);
-  }, []);
+  };
 
   return { user, loading, displayName, setDisplayName, signIn };
 }

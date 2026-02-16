@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import type { GameState, Card, Row, Board } from '@shared/core/types';
 import { GamePhase } from '@shared/core/types';
@@ -83,7 +83,7 @@ export function GamePage({ gameState, hand, uid, roomId, onLeaveRoom }: GamePage
   const remainingHand = hand.filter((c) => !placedCardKeys.has(cardKey(c)));
 
   // Compute merged board: Firestore board + local placements
-  const mergedBoard = useMemo((): Board => {
+  const mergedBoard = ((): Board => {
     const player = gameState.players[uid];
     if (!player) return { top: [], middle: [], bottom: [] };
     const board: Board = {
@@ -101,9 +101,9 @@ export function GamePage({ gameState, hand, uid, roomId, onLeaveRoom }: GamePage
       }
     }
     return board;
-  }, [gameState.players, uid, placements]);
+  })();
 
-  const handleRowClick = useCallback(async (row: Row) => {
+  const handleRowClick = async (row: Row) => {
     if (selectedIndex === null || submitting) return;
     const card = remainingHand[selectedIndex];
     if (!card) return;
@@ -136,7 +136,7 @@ export function GamePage({ gameState, hand, uid, roomId, onLeaveRoom }: GamePage
         await placeCardsFn({ roomId, placements: placementData, discard });
         trackEvent('place_cards', { roomId, street: gameState.street });
         // Don't clear placements here — they persist until the phase-change
-        // cleanup (line 70-74). The dedup logic in mergedBoard ensures no
+        // cleanup. The dedup logic in mergedBoard ensures no
         // double-counting once the Firestore board snapshot arrives.
       } catch (err) {
         console.error('Failed to place cards:', err);
@@ -145,13 +145,13 @@ export function GamePage({ gameState, hand, uid, roomId, onLeaveRoom }: GamePage
         setSubmitting(false);
       }
     }
-  }, [selectedIndex, remainingHand, mergedBoard, placements, submitting, requiredPlacements, isStreet, hand, roomId, gameState.street]);
+  };
 
-  const handleCloseResults = useCallback(() => {
+  const handleCloseResults = () => {
     setShowResults(false);
-  }, []);
+  };
 
-  const handleLeave = useCallback(async () => {
+  const handleLeave = async () => {
     setLeaving(true);
     try {
       const leaveGameFn = httpsCallable(functions, 'leaveGame');
@@ -163,7 +163,7 @@ export function GamePage({ gameState, hand, uid, roomId, onLeaveRoom }: GamePage
       setToast('Failed to leave game');
       setLeaving(false);
     }
-  }, [roomId, onLeaveRoom]);
+  };
 
   const isObserver = !gameState.playerOrder.includes(uid);
 

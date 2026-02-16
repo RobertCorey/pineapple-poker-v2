@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import type { GameState } from '@shared/core/types';
 import { scorePairwise } from '@shared/game-logic/scoring';
@@ -35,7 +35,7 @@ export function MobileMatchOverlay({ gameState, currentUid, roomId }: MobileMatc
     .map((uid) => gameState.players[uid])
     .filter(Boolean);
 
-  const handlePlayAgain = useCallback(async () => {
+  const handlePlayAgain = async () => {
     setRestarting(true);
     try {
       const playAgainFn = httpsCallable(functions, 'playAgain');
@@ -45,7 +45,7 @@ export function MobileMatchOverlay({ gameState, currentUid, roomId }: MobileMatc
       console.error('Failed to restart:', err);
       setRestarting(false);
     }
-  }, [roomId]);
+  };
 
   return (
     <div data-testid="mobile-match-overlay" className="fixed inset-0 bg-gray-900 z-50 flex flex-col items-center justify-center px-6 font-mono overflow-y-auto">

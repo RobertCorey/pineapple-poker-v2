@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import type { GameState } from '@shared/core/types';
 import { scorePairwise } from '@shared/game-logic/scoring';
@@ -38,7 +38,7 @@ export function MatchResults({ gameState, currentUid, roomId }: MatchResultsProp
     .map((uid) => gameState.players[uid])
     .filter(Boolean);
 
-  const handlePlayAgain = useCallback(async () => {
+  const handlePlayAgain = async () => {
     setRestarting(true);
     try {
       const playAgainFn = httpsCallable(functions, 'playAgain');
@@ -48,7 +48,7 @@ export function MatchResults({ gameState, currentUid, roomId }: MatchResultsProp
       console.error('Failed to restart:', err);
       setRestarting(false);
     }
-  }, [roomId]);
+  };
 
   return (
     <div data-testid="match-results" className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 font-mono">
