@@ -33,13 +33,12 @@ interface PlayerBoardProps {
   hasCardSelected?: boolean;
   cardWidthPx: number;
   score?: number;
-  hasPlaced?: boolean;
   disconnected?: boolean;
 }
 
 export function PlayerBoard({
   board, playerName, fouled, isCurrentPlayer, onRowClick, hasCardSelected,
-  cardWidthPx, score, hasPlaced, disconnected,
+  cardWidthPx, score, disconnected,
 }: PlayerBoardProps) {
   const topSlots = padRow(board.top, 3);
   const middleSlots = padRow(board.middle, 5);
@@ -68,20 +67,17 @@ export function PlayerBoard({
       style={{ padding: boardPad, maxWidth: boardMaxW }}
     >
       <div
-        className="text-center mb-1 text-gray-300 flex items-center justify-center gap-1 flex-wrap"
+        className="text-center mb-1 text-gray-300 flex items-center justify-center gap-1 overflow-hidden whitespace-nowrap"
         style={{ fontSize: headerFs, lineHeight: '1.2' }}
       >
-        <span className="truncate max-w-[10em]">{playerName}</span>
+        <span className="truncate">{playerName}</span>
         {score !== undefined && (
-          <span className={score >= 0 ? 'text-green-400' : 'text-red-400'}>
+          <span className="flex-shrink-0" style={{ color: score >= 0 ? '#4ade80' : '#f87171' }}>
             [{score >= 0 ? `+${score}` : score}]
           </span>
         )}
-        {hasPlaced !== undefined && (
-          <span>{hasPlaced ? '\u2713' : '\u00b7'}</span>
-        )}
-        {fouled && <span className="text-red-400">[F]</span>}
-        {disconnected && <span className="text-red-500">[DC]</span>}
+        {fouled && <span className="text-red-400 flex-shrink-0">[F]</span>}
+        {disconnected && <span className="text-red-500 flex-shrink-0">[DC]</span>}
       </div>
 
       {/* Top row - 3 cards, centered with spacers to match 5-card row width */}

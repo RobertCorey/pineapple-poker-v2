@@ -6,7 +6,7 @@ import { placeCards, leaveGame } from '../../api.ts';
 import { trackEvent } from '../../firebase.ts';
 import { useCountdown } from '../../hooks/useCountdown.ts';
 import { useToast } from '../../hooks/useToast.ts';
-import { cardKey, boardCardCount, expectedCardsForStreet } from '../../utils/card-utils.ts';
+import { cardKey } from '../../utils/card-utils.ts';
 import type { Placement } from '../../utils/card-utils.ts';
 import { PlayerBoard } from '../PlayerBoard.tsx';
 import { Toast } from '../Toast.tsx';
@@ -202,8 +202,6 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
 
   const isObserver = !gameState.playerOrder.includes(uid);
   const currentPlayer = gameState.players[uid];
-  const expectedCards = expectedCardsForStreet(gameState.street);
-
   const numOpponents = gameState.playerOrder.filter((id) => id !== uid).length;
   const opponentLayout = computeOpponentGridLayout(opponentSize.w, opponentSize.h, numOpponents);
   const playerCardW = computePlayerCardWidth(playerSize.w, playerSize.h);
@@ -262,7 +260,7 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
                 hasCardSelected={selectedIndex !== null && !submitting}
                 cardWidthPx={playerCardW}
                 score={currentPlayer.score}
-                hasPlaced={boardCardCount(mergedBoard) >= expectedCards}
+
               />
             )}
           </div>
