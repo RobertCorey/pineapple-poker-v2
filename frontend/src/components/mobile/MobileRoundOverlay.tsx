@@ -1,14 +1,12 @@
 import type { GameState } from '@shared/core/types';
 import { formatScore } from '../../utils/scoring-display.ts';
-import { PairwiseBreakdown } from '../PairwiseBreakdown.tsx';
 
 interface MobileRoundOverlayProps {
   gameState: GameState;
   currentUid: string;
-  onClose?: () => void;
 }
 
-export function MobileRoundOverlay({ gameState, currentUid, onClose }: MobileRoundOverlayProps) {
+export function MobileRoundOverlay({ gameState, currentUid }: MobileRoundOverlayProps) {
   const players = gameState.playerOrder.map((uid) => gameState.players[uid]).filter(Boolean);
   const roundResults = gameState.roundResults ?? {};
 
@@ -55,22 +53,7 @@ export function MobileRoundOverlay({ gameState, currentUid, onClose }: MobileRou
         </table>
       </div>
 
-      {/* Pairwise breakdown */}
-      <div className="w-full max-w-sm mb-6">
-        <PairwiseBreakdown players={players} roundResults={roundResults} />
-      </div>
-
-      {onClose ? (
-        <button
-          data-testid="close-results"
-          onClick={onClose}
-          className="px-6 py-2 bg-gray-700 hover:bg-gray-600 active:bg-gray-800 text-white text-sm rounded-lg"
-        >
-          Close
-        </button>
-      ) : (
-        <p className="text-xs text-gray-500 animate-pulse">Next round starting...</p>
-      )}
+      <p className="text-xs text-gray-500 animate-pulse">Next round starting...</p>
     </div>
   );
 }
