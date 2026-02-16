@@ -1,7 +1,5 @@
 import type { Firestore } from 'firebase-admin/firestore';
-import type { GameState } from '../../shared/core/types';
 import { GamePhase as GP } from '../../shared/core/types';
-import { parseGameState } from '../../shared/core/schemas';
 import {
   maybeStartRound,
   scoreRound,
@@ -83,11 +81,14 @@ export class Dealer {
   }
 
   private onGameSnapshot(roomId: string, doc: FirebaseFirestore.QueryDocumentSnapshot): void {
-    const game = parseGameState(doc.data());
+    const game = doc.data();
+    const phase = game.phase as string;
+    const phaseDeadline = (game.phaseDeadline as number | null) ?? null;
+    const playerOrder = game.playerOrder as string[];
 
-    console.log(`[Dealer] [${roomId}] Snapshot: phase=${game.phase}, street=${game.street}, players=${game.playerOrder.length}`);
+    console.log(`[Dealer] [${roomId}] Snapshot: phase=${phase}, street=${game.street}, players=${playerOrder.length}`);
 
-    this.maybeUpdateTimer(roomId, game.phaseDeadline, game.phase);
+    this.maybeUpdateTimer(roomId, phaseDeadline, phase);
 
     this.reactToPhase(roomId, game).catch((err) => {
       console.error(`[Dealer] [${roomId}] Error reacting to phase:`, err);
@@ -127,33 +128,41 @@ export class Dealer {
     }
   }
 
-  private async reactToPhase(roomId: string, game: GameState): Promise<void> {
-    if (game.phase === GP.Lobby) {
-      if (game.round >= 1 && game.playerOrder.length >= 2) {
+  private async reactToPhase(roomId: string, game: Record<string, unknown>): Promise<void> {
+    const phase = game.phase as string;
+    const playerOrder = game.playerOrder as string[];
+
+    if (phase === GP.Lobby) {
+      const round = game.round as number;
+      if (round >= 1 && playerOrder.length >= 2) {
         console.log(`[Dealer] [${roomId}] Lobby with round >= 1 and 2+ players — starting round`);
         await maybeStartRound(this.db, roomId);
       }
       return;
     }
 
-    if (game.phase === GP.MatchComplete) {
+    if (phase === GP.MatchComplete) {
       // Wait for host to click "Play Again"
       return;
     }
 
-    if (isPlacementPhase(game.phase)) {
-      const allPlaced = game.playerOrder.every((uid) => {
-        const p = game.players[uid];
+    if (isPlacementPhase(phase)) {
+      const players = game.players as Record<
+        string,
+        { currentHand: { length: number }; fouled: boolean }
+      >;
+      const allPlaced = playerOrder.every((uid) => {
+        const p = players[uid];
         return !p || p.fouled || p.currentHand.length === 0;
       });
       if (allPlaced) {
-        console.log(`[Dealer] [${roomId}] All placed in ${game.phase} — advancing`);
+        console.log(`[Dealer] [${roomId}] All placed in ${phase} — advancing`);
         await checkAndAdvance(this.db, roomId);
       }
       return;
     }
 
-    if (game.phase === GP.Scoring) {
+    if (phase === GP.Scoring) {
       console.log(`[Dealer] [${roomId}] Scoring round`);
       await scoreRound(this.db, roomId);
       return;

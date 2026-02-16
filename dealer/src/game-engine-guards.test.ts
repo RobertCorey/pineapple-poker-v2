@@ -8,11 +8,10 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import * as admin from 'firebase-admin';
 import type { Firestore } from 'firebase-admin/firestore';
-import type { Card, PlayerState, GameState } from '../../shared/core/types';
 import { GamePhase as GP } from '../../shared/core/types';
+import type { Card } from '../../shared/core/types';
 import { gameDoc, handDoc } from '../../shared/core/firestore-paths';
 import { emptyBoard } from '../../shared/game-logic/board-utils';
-import { parseGameState } from '../../shared/core/schemas';
 import { handlePhaseTimeout } from './game-engine';
 import { advanceStreet } from './game-engine';
 
@@ -44,39 +43,21 @@ function makeHand(n: number): Card[] {
   }));
 }
 
-function makePlayer(uid: string, overrides: Partial<PlayerState> = {}): PlayerState {
-  return {
-    uid,
-    displayName: uid,
-    board: emptyBoard(),
-    currentHand: [],
-    disconnected: false,
-    fouled: false,
-    score: 0,
-    ...overrides,
-  };
-}
-
-async function setGameState(roomId: string, state: Partial<GameState>) {
+async function setGameState(roomId: string, state: Record<string, unknown>) {
   await db.doc(gameDoc(roomId)).set({
-    gameId: roomId,
     phase: GP.Lobby,
     street: 0,
-    round: 1,
-    totalRounds: 3,
-    hostUid: 'p1',
     playerOrder: [],
     players: {},
     phaseDeadline: null,
-    createdAt: Date.now(),
     updatedAt: Date.now(),
     ...state,
   });
 }
 
-async function getGame(roomId: string): Promise<GameState> {
+async function getGame(roomId: string) {
   const snap = await db.doc(gameDoc(roomId)).get();
-  return parseGameState(snap.data());
+  return snap.data()!;
 }
 
 // ---- handlePhaseTimeout guards ----
@@ -89,8 +70,8 @@ describe('handlePhaseTimeout guards', () => {
       street: 5,
       playerOrder: ['p1', 'p2'],
       players: {
-        p1: makePlayer('p1', { currentHand: makeHand(3) }),
-        p2: makePlayer('p2', { currentHand: makeHand(3) }),
+        p1: { uid: 'p1', currentHand: makeHand(3), fouled: false, board: emptyBoard() },
+        p2: { uid: 'p2', currentHand: makeHand(3), fouled: false, board: emptyBoard() },
       },
       phaseDeadline: Date.now() - 1000, // expired
     });
@@ -99,8 +80,8 @@ describe('handlePhaseTimeout guards', () => {
     const game = await getGame(roomId);
 
     // Players should NOT be fouled — wrong phase
-    expect(game.players.p1.fouled).toBe(false);
-    expect(game.players.p2.fouled).toBe(false);
+    expect((game.players as Record<string, { fouled: boolean }>).p1.fouled).toBe(false);
+    expect((game.players as Record<string, { fouled: boolean }>).p2.fouled).toBe(false);
   });
 
   it('does nothing when phase is complete', async () => {
@@ -110,7 +91,7 @@ describe('handlePhaseTimeout guards', () => {
       street: 5,
       playerOrder: ['p1'],
       players: {
-        p1: makePlayer('p1', { currentHand: makeHand(3) }),
+        p1: { uid: 'p1', currentHand: makeHand(3), fouled: false, board: emptyBoard() },
       },
       phaseDeadline: Date.now() - 1000,
     });
@@ -118,7 +99,7 @@ describe('handlePhaseTimeout guards', () => {
     await handlePhaseTimeout(db, roomId);
     const game = await getGame(roomId);
 
-    expect(game.players.p1.fouled).toBe(false);
+    expect((game.players as Record<string, { fouled: boolean }>).p1.fouled).toBe(false);
   });
 
   it('does nothing when deadline has not expired', async () => {
@@ -128,8 +109,8 @@ describe('handlePhaseTimeout guards', () => {
       street: 1,
       playerOrder: ['p1', 'p2'],
       players: {
-        p1: makePlayer('p1', { currentHand: makeHand(5) }),
-        p2: makePlayer('p2'),
+        p1: { uid: 'p1', currentHand: makeHand(5), fouled: false, board: emptyBoard() },
+        p2: { uid: 'p2', currentHand: [], fouled: false, board: emptyBoard() },
       },
       phaseDeadline: Date.now() + 30_000, // 30 seconds from now
     });
@@ -141,18 +122,18 @@ describe('handlePhaseTimeout guards', () => {
     const game = await getGame(roomId);
 
     // p1 should NOT be fouled — deadline hasn't passed
-    expect(game.players.p1.fouled).toBe(false);
+    expect((game.players as Record<string, { fouled: boolean }>).p1.fouled).toBe(false);
   });
 
-  it('auto-places cards for unplaced players when deadline has expired', async () => {
+  it('fouls unplaced players when deadline has expired in placement phase', async () => {
     const roomId = uniqueRoomId();
     await setGameState(roomId, {
       phase: GP.InitialDeal,
       street: 1,
       playerOrder: ['p1', 'p2'],
       players: {
-        p1: makePlayer('p1', { currentHand: makeHand(5) }),
-        p2: makePlayer('p2'),
+        p1: { uid: 'p1', currentHand: makeHand(5), fouled: false, board: emptyBoard() },
+        p2: { uid: 'p2', currentHand: [], fouled: false, board: emptyBoard() },
       },
       phaseDeadline: Date.now() - 1000, // expired
     });
@@ -162,9 +143,11 @@ describe('handlePhaseTimeout guards', () => {
     await handlePhaseTimeout(db, roomId);
     const game = await getGame(roomId);
 
-    // p1 had cards auto-placed, p2 already placed
-    expect(game.players.p1.currentHand).toEqual([]);
-    expect(game.players.p2.fouled).toBe(false);
+    // p1 fouled (had cards), p2 not fouled (already placed)
+    const players = game.players as Record<string, { fouled: boolean; currentHand: Card[] }>;
+    expect(players.p1.fouled).toBe(true);
+    expect(players.p1.currentHand).toEqual([]);
+    expect(players.p2.fouled).toBe(false);
     expect(game.phaseDeadline).toBeNull();
   });
 });
@@ -179,7 +162,7 @@ describe('advanceStreet guards', () => {
       street: 5,
       playerOrder: ['p1'],
       players: {
-        p1: makePlayer('p1'),
+        p1: { uid: 'p1', currentHand: [], fouled: false, board: emptyBoard() },
       },
     });
 
@@ -194,7 +177,7 @@ describe('advanceStreet guards', () => {
       street: 5,
       playerOrder: ['p1'],
       players: {
-        p1: makePlayer('p1'),
+        p1: { uid: 'p1', currentHand: [], fouled: false, board: emptyBoard() },
       },
     });
 
@@ -209,8 +192,8 @@ describe('advanceStreet guards', () => {
       street: 0,
       playerOrder: ['p1', 'p2'],
       players: {
-        p1: makePlayer('p1'),
-        p2: makePlayer('p2'),
+        p1: { uid: 'p1', currentHand: [], fouled: false, board: emptyBoard() },
+        p2: { uid: 'p2', currentHand: [], fouled: false, board: emptyBoard() },
       },
     });
 
@@ -225,8 +208,8 @@ describe('advanceStreet guards', () => {
       street: 1,
       playerOrder: ['p1', 'p2'],
       players: {
-        p1: makePlayer('p1', { currentHand: makeHand(5) }),
-        p2: makePlayer('p2'),
+        p1: { uid: 'p1', currentHand: makeHand(5), fouled: false, board: emptyBoard() },
+        p2: { uid: 'p2', currentHand: [], fouled: false, board: emptyBoard() },
       },
     });
 
@@ -241,8 +224,8 @@ describe('advanceStreet guards', () => {
       street: 5,
       playerOrder: ['p1', 'p2'],
       players: {
-        p1: makePlayer('p1'),
-        p2: makePlayer('p2'),
+        p1: { uid: 'p1', currentHand: [], fouled: false, board: emptyBoard() },
+        p2: { uid: 'p2', currentHand: [], fouled: false, board: emptyBoard() },
       },
     });
 

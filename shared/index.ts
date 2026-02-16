@@ -2,7 +2,6 @@
 export * from './core/types';
 export * from './core/constants';
 export * from './core/firestore-paths';
-export * from './core/schemas';
 
 // Game logic
 export * from './game-logic/deck';

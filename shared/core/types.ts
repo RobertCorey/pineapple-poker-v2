@@ -98,20 +98,11 @@ export interface PlayerState {
   uid: string;
   displayName: string;
   board: Board;
+  deck: Card[];          // remaining cards in this player's personal deck
   currentHand: Card[];   // cards currently in hand (to be placed)
   disconnected: boolean;
   fouled: boolean;
   score: number;
-}
-
-/** Subcollection document: games/{roomId}/hands/{uid} */
-export interface HandDoc {
-  cards: Card[];
-}
-
-/** Subcollection document: games/{roomId}/decks/{uid} */
-export interface DeckDoc {
-  cards: Card[];
 }
 
 export interface RoundResult {
