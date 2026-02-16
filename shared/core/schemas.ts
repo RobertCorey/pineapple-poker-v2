@@ -13,6 +13,7 @@ import { z } from 'zod';
 import type {
   PlayerState,
   GameState,
+  MatchSettings,
   RoundResult,
   HandDoc,
   DeckDoc,
@@ -71,6 +72,13 @@ export const RoundResultSchema = z.object({
   fouled: z.boolean(),
 });
 
+// ---- Match settings ----
+
+export const MatchSettingsSchema = z.object({
+  turnTimeoutMs: z.number().int().min(1_000),
+  interRoundDelayMs: z.number().int().min(0),
+});
+
 // ---- Game state (the games/{roomId} document) ----
 
 export const GameStateSchema = z.object({
@@ -82,6 +90,7 @@ export const GameStateSchema = z.object({
   round: z.number().int(),
   totalRounds: z.number().int(),
   hostUid: z.string(),
+  settings: MatchSettingsSchema,
   roundResults: z.record(z.string(), RoundResultSchema).optional(),
   createdAt: z.number(),
   updatedAt: z.number(),
@@ -102,6 +111,10 @@ export const DeckDocSchema = z.object({
 // Single safe cast point, backed by runtime validation.
 // Zod validates the shape; the cast bridges Zod's inferred type (e.g. rank: number)
 // to the existing narrow TypeScript type (e.g. rank: Rank).
+
+export function parseMatchSettings(data: unknown): MatchSettings {
+  return MatchSettingsSchema.parse(data) as unknown as MatchSettings;
+}
 
 export function parseGameState(data: unknown): GameState {
   return GameStateSchema.parse(data) as unknown as GameState;

@@ -7,14 +7,16 @@ import { T_JOIN, T_PHASE, T_GAME_TIMEOUT } from './helpers/timeouts';
  * Timeout E2E test: when a player times out, their cards are auto-placed.
  * In the next round, they are still active and can play normally.
  * Verifies cumulative scoring works across rounds.
+ *
+ * Uses 5s turn timeout via match settings to speed up the test.
  */
 
 test('timed-out player gets auto-placed and is active in next round', async ({ browser }) => {
-  test.setTimeout(180_000);
+  test.setTimeout(60_000);
 
-  const { alice, bob, cleanup } = await setupTwoPlayerGame(browser);
+  const { alice, bob, cleanup } = await setupTwoPlayerGame(browser, { timeout: 5_000 });
 
-  // --- Host starts match ---
+  // --- Host starts match (settings with 5s timeout applied via URL param) ---
   await alice.getByTestId('start-match-button').click();
 
   // --- Round 1: Alice places, Bob times out on initial deal ---
@@ -23,7 +25,7 @@ test('timed-out player gets auto-placed and is active in next round', async ({ b
 
   await placeInitialDeal(alice);
 
-  // Bob does NOT place — waits for 30s timeout, cards get auto-placed
+  // Bob does NOT place — waits for 5s timeout, cards get auto-placed
   await expect(alice.getByTestId('phase-label')).toContainText('street_2', { timeout: T_GAME_TIMEOUT });
 
   // Alice plays manually, Bob times out on each street (auto-placed)

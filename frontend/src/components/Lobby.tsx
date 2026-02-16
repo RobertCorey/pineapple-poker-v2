@@ -1,7 +1,8 @@
 import { useState, useCallback, useEffect } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../firebase.ts';
-import type { GameState } from '@shared/core/types';
+import type { GameState, MatchSettings } from '@shared/core/types';
+import { DEFAULT_MATCH_SETTINGS } from '@shared/core/constants';
 
 interface LobbyProps {
   uid: string;
@@ -21,6 +22,17 @@ export function Lobby({ uid, displayName, setDisplayName, signIn, gameState, isI
   const [leaving, setLeaving] = useState(false);
   const [addingBot, setAddingBot] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+
+  // Match settings — host can configure before starting
+  const getInitialTimeout = (): number => {
+    if (import.meta.env.DEV) {
+      const params = new URLSearchParams(window.location.search);
+      const t = params.get('timeout');
+      if (t && !isNaN(Number(t))) return Number(t);
+    }
+    return DEFAULT_MATCH_SETTINGS.turnTimeoutMs;
+  };
+  const [turnTimeoutMs, setTurnTimeoutMs] = useState<number>(getInitialTimeout);
 
   useEffect(() => {
     if (!toast) return;
@@ -52,13 +64,17 @@ export function Lobby({ uid, displayName, setDisplayName, signIn, gameState, isI
     setStarting(true);
     try {
       const startMatchFn = httpsCallable(functions, 'startMatch');
-      await startMatchFn({ roomId });
+      const settings: MatchSettings = {
+        turnTimeoutMs,
+        interRoundDelayMs: DEFAULT_MATCH_SETTINGS.interRoundDelayMs,
+      };
+      await startMatchFn({ roomId, settings });
     } catch (err) {
       console.error('Failed to start match:', err);
       setToast('Failed to start match');
       setStarting(false);
     }
-  }, [roomId]);
+  }, [roomId, turnTimeoutMs]);
 
   const handleLeave = useCallback(async () => {
     setLeaving(true);
@@ -124,6 +140,31 @@ export function Lobby({ uid, displayName, setDisplayName, signIn, gameState, isI
                 )}
               </div>
             ))}
+          </div>
+
+          {/* Match settings */}
+          <div className="mb-4">
+            <div className="text-xs text-gray-500 mb-2">Match Settings</div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-gray-400">Turn Timer</span>
+              {isHost ? (
+                <select
+                  data-testid="turn-timeout-select"
+                  value={turnTimeoutMs}
+                  onChange={(e) => setTurnTimeoutMs(Number(e.target.value))}
+                  className="bg-gray-800 border border-gray-600 text-white text-xs px-2 py-1 focus:outline-none focus:border-green-500"
+                >
+                  <option value={5000}>5s</option>
+                  <option value={10000}>10s</option>
+                  <option value={20000}>20s</option>
+                  <option value={30000}>30s</option>
+                  <option value={45000}>45s</option>
+                  <option value={60000}>60s</option>
+                </select>
+              ) : (
+                <span className="text-gray-400">{turnTimeoutMs / 1000}s</span>
+              )}
+            </div>
           </div>
 
           <div className="space-y-2">

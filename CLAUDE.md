@@ -73,14 +73,14 @@ npm test                           # Playwright E2E tests
 
 E2E tests are in `e2e/`. Each test generates a unique room code for isolation — no shared state between tests.
 
-7 tests in the main suite (`npm test`):
+6 tests in the main suite (`npm test`):
 - `happy-path.spec.ts` — 2-player full 3-round match, play again
 - `card-placement.spec.ts` — card placement UI, auto-submit, auto-discard
 - `sit-out.spec.ts` — timeout auto-foul, player active next round
 - `leave-game.spec.ts` — player leaves mid-round, game continues for remaining player
 - `observer.spec.ts` — late joiner observes full match, promoted via play-again, 3-player game
 - `scoring.spec.ts` — foul penalty scores (+6/-6), pairwise breakdown, cumulative totals
-- `dev-ui.spec.ts` — debug panel toggle, hand summary, row evaluation labels, pairwise display
+
 
 ### All dealer tests
 
@@ -163,11 +163,19 @@ Game engine in `dealer/src/game-engine.ts` — all functions take `(db, roomId)`
 - `handlePhaseTimeout(db, roomId)` — auto-foul players who haven't placed
 - `checkAndAdvance(db, roomId)` — check all placed and advance (recursive for all-fouled cases)
 
-Phases: `waiting` → `initial_deal` → `street_2` → `street_3` → `street_4` → `street_5` → `scoring` → `complete`
+Phases: `lobby` → `initial_deal` → `street_2` → `street_3` → `street_4` → `street_5` → `scoring` → `complete`
 
-### Timeout = Auto-Foul
+### Match Settings
 
-When phaseDeadline passes, timed-out players get `fouled: true`, hand cleared, board cleared, game advances. Score: -6 per opponent.
+Configurable per-room via `MatchSettings` (stored in game doc as `settings`):
+- `turnTimeoutMs` — timeout for all placement phases (default: 30s)
+- `interRoundDelayMs` — delay between rounds (default: 5s)
+
+Host sets settings in Lobby UI before starting. In dev mode, `?timeout=5000` URL param pre-fills the dropdown.
+
+### Timeout = Auto-Place
+
+When phaseDeadline passes, timed-out players get cards auto-placed randomly into available board slots. Player stays active for remaining streets.
 
 ### Scoring (simplified)
 
@@ -191,7 +199,7 @@ Players who join mid-round become observers (added to `players` but NOT `playerO
 - Cloud Functions called via `httpsCallable` from firebase/functions SDK — all include `roomId`
 - Frontend imports shared code via `@shared/` alias (e.g., `import type { Card } from '@shared/core/types'`)
 - Dev-mode minimal UI: monospace font, minimal styling, raw phase/street display
-- `DebugPanel` sidebar: toggleable via [DBG] button, shows game state, player statuses, phase info
+
 - `handDescription.ts` utility: human-readable hand labels (e.g., "Pair (K)", "Flush (A-high)")
 - `PlayerBoard` shows `RowEval` labels on completed rows using hand-evaluation functions
 
@@ -316,3 +324,17 @@ Merge to main
 - **Streets 2–5**: deal 3 cards, place 2, discard 1
 - **Foul**: rows not in ascending strength (bottom ≥ middle > top) — penalty of 6 points per opponent
 - **Scoring**: pairwise row comparisons + scoop bonus (3 pts for winning all 3 rows)
+
+## CI/CD & Deployment
+
+### Continuous Integration (CI)
+Runs on every PR and push to `main` (`.github/workflows/ci.yml`).
+- **Check**: Lint, build all workspaces, unit tests.
+- **E2E**: Runs Playwright tests against **Firebase Emulators**. ensuring no regression before merge.
+
+### Deployment
+Automatic deployment on merge to `main` (`.github/workflows/deploy.yml`).
+- **Selective Deploy**: Checks changed files to determine if Frontend/Functions (Firebase) or Dealer (VM) needs deployment.
+- **Firebase**: Deploys Hosting & Functions to `pineapple-poker-8f3`.
+- **Dealer**: Deploys to GCE VM via SSH + rsync, restarts systemd service.
+- **Smoke Test**: Runs Playwright E2E tests against **Production** URL after deployment to verify live system health.

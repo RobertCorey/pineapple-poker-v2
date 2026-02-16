@@ -120,6 +120,11 @@ export interface RoundResult {
   fouled: boolean;
 }
 
+export interface MatchSettings {
+  turnTimeoutMs: number;       // timeout for all placement phases (initial deal + streets)
+  interRoundDelayMs: number;   // delay between rounds before auto-starting next
+}
+
 export interface GameState {
   gameId: string;
   phase: GamePhase;
@@ -129,6 +134,7 @@ export interface GameState {
   round: number;           // 1-based current round (0 = pre-match lobby)
   totalRounds: number;     // rounds per match (always 3)
   hostUid: string;         // uid of match creator
+  settings: MatchSettings; // configurable match settings
   roundResults?: Record<string, RoundResult>;
   createdAt: number;
   updatedAt: number;

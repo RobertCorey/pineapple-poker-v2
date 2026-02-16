@@ -86,6 +86,7 @@ function gameState(overrides: Partial<{
   players: Record<string, unknown>;
   phaseDeadline: number | null;
   hostUid: string;
+  settings: { turnTimeoutMs: number; interRoundDelayMs: number };
 }> = {}): Record<string, unknown> {
   return {
     gameId: 'TEST',
@@ -97,6 +98,7 @@ function gameState(overrides: Partial<{
     players: {},
     phaseDeadline: null,
     hostUid: 'p1',
+    settings: { turnTimeoutMs: 30_000, interRoundDelayMs: 5_000 },
     createdAt: Date.now(),
     updatedAt: Date.now(),
     ...overrides,
