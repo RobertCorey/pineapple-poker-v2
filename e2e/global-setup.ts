@@ -49,4 +49,21 @@ export default async function globalSetup() {
     ].join('\n');
     throw new Error(msg);
   }
+
+  // Warm up Cloud Functions emulator to avoid cold-start timeouts in tests.
+  // The first function invocation can take 3-10s on CI while the emulator JIT-loads.
+  if (!productionUrl) {
+    const fns = ['joinGame', 'placeCards', 'startMatch', 'leaveGame', 'playAgain'];
+    await Promise.allSettled(
+      fns.map((fn) =>
+        fetch(`http://localhost:5001/pineapple-poker-8f3/us-central1/${fn}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ data: {} }),
+        }).catch(() => {}),
+      ),
+    );
+    // Give the emulator time to finish loading all function definitions.
+    await new Promise((r) => setTimeout(r, 3_000));
+  }
 }
