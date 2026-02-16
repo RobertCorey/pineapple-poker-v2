@@ -1,7 +1,6 @@
 import type { GameState } from '@shared/core/types';
 import { PlayerBoard } from '../PlayerBoard.tsx';
 
-
 interface MobileOpponentGridProps {
   gameState: GameState;
   currentUid: string;

@@ -260,7 +260,6 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
                 hasCardSelected={selectedIndex !== null && !submitting}
                 cardWidthPx={playerCardW}
                 score={currentPlayer.score}
-
               />
             )}
           </div>
