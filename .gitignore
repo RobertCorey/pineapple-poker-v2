@@ -33,6 +33,7 @@ dealer/lib
 .env
 .env.*
 !frontend/.env.production
+!frontend/.env
 
 # Firebase
 .firebase/
