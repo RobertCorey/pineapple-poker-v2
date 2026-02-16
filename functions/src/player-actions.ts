@@ -34,7 +34,7 @@ const PlaceCardsSchema = RoomIdSchema.extend({
     card: CardSchema,
     row: z.enum(['top', 'middle', 'bottom']),
   })),
-  discard: CardSchema.optional(),
+  discard: CardSchema.nullish(),
 });
 
 interface PlaceCardsRequest {
