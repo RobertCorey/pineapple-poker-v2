@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react';
-import { httpsCallable } from 'firebase/functions';
-import { functions, trackEvent } from '../firebase.ts';
+import { useState } from 'react';
+import { joinGame } from '../api.ts';
+import { trackEvent } from '../firebase.ts';
+import { useToast } from '../hooks/useToast.ts';
 import { generateRoomCode } from '../utils/roomCode.ts';
+import { Toast } from './Toast.tsx';
 
 interface RoomSelectorProps {
   displayName: string;
@@ -15,13 +17,7 @@ export function RoomSelector({ displayName, setDisplayName, signIn, onRoomJoined
   const [roomCodeInput, setRoomCodeInput] = useState('');
   const [creating, setCreating] = useState(false);
   const [joining, setJoining] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(null), 3000);
-    return () => clearTimeout(t);
-  }, [toast]);
+  const { message: toast, showToast } = useToast();
 
   const handleCreate = async () => {
     if (!nameInput.trim()) return;
@@ -30,13 +26,12 @@ export function RoomSelector({ displayName, setDisplayName, signIn, onRoomJoined
       setDisplayName(nameInput.trim());
       await signIn();
       const roomId = generateRoomCode();
-      const joinGame = httpsCallable(functions, 'joinGame');
       await joinGame({ roomId, displayName: nameInput.trim(), create: true });
       trackEvent('create_room', { roomId });
       onRoomJoined(roomId);
     } catch (err) {
       console.error('Failed to create room:', err);
-      setToast('Failed to create room — try again');
+      showToast('Failed to create room — try again');
     } finally {
       setCreating(false);
     }
@@ -49,13 +44,12 @@ export function RoomSelector({ displayName, setDisplayName, signIn, onRoomJoined
       setDisplayName(nameInput.trim());
       await signIn();
       const roomId = roomCodeInput.trim().toUpperCase();
-      const joinGame = httpsCallable(functions, 'joinGame');
       await joinGame({ roomId, displayName: nameInput.trim() });
       trackEvent('join_room', { roomId });
       onRoomJoined(roomId);
     } catch (err) {
       console.error('Failed to join room:', err);
-      setToast('Room not found or failed to join');
+      showToast('Room not found or failed to join');
     } finally {
       setJoining(false);
     }
@@ -121,11 +115,7 @@ export function RoomSelector({ displayName, setDisplayName, signIn, onRoomJoined
           </div>
         </div>
       </div>
-      {toast && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 bg-red-900 border border-red-700 px-4 py-2 text-xs text-red-300 shadow-lg z-50">
-          {toast}
-        </div>
-      )}
+      <Toast message={toast} />
     </div>
   );
 }

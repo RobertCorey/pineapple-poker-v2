@@ -1,24 +1,14 @@
 import { useState } from 'react';
-import { httpsCallable } from 'firebase/functions';
 import type { GameState } from '@shared/core/types';
-import { scorePairwise } from '@shared/game-logic/scoring';
-import { functions, trackEvent } from '../../firebase.ts';
+import { playAgain } from '../../api.ts';
+import { trackEvent } from '../../firebase.ts';
+import { formatScore } from '../../utils/scoring-display.ts';
+import { PairwiseBreakdown } from '../PairwiseBreakdown.tsx';
 
 interface MobileMatchOverlayProps {
   gameState: GameState;
   currentUid: string;
   roomId: string;
-}
-
-function formatScore(n: number): string {
-  return n >= 0 ? `+${n}` : `${n}`;
-}
-
-function pairwiseLabel(rowPoints: number, scoopBonus: number, total: number, aFouled: boolean, bFouled: boolean): string {
-  if (aFouled && bFouled) return `both fouled = ${formatScore(total)}`;
-  if (aFouled || bFouled) return `foul = ${formatScore(total)}`;
-  if (scoopBonus !== 0) return `rows ${formatScore(rowPoints)} scoop ${formatScore(scoopBonus)} = ${formatScore(total)}`;
-  return `rows ${formatScore(rowPoints)} = ${formatScore(total)}`;
 }
 
 export function MobileMatchOverlay({ gameState, currentUid, roomId }: MobileMatchOverlayProps) {
@@ -38,8 +28,7 @@ export function MobileMatchOverlay({ gameState, currentUid, roomId }: MobileMatc
   const handlePlayAgain = async () => {
     setRestarting(true);
     try {
-      const playAgainFn = httpsCallable(functions, 'playAgain');
-      await playAgainFn({ roomId });
+      await playAgain({ roomId });
       trackEvent('play_again', { roomId });
     } catch (err) {
       console.error('Failed to restart:', err);
@@ -88,29 +77,7 @@ export function MobileMatchOverlay({ gameState, currentUid, roomId }: MobileMatc
               </tbody>
             </table>
 
-            {activePlayers.length >= 2 && (
-              <div className="text-xs text-gray-500 border-t border-gray-800 pt-2 mb-4">
-                <div className="font-bold text-gray-400 mb-1">Pairwise</div>
-                {activePlayers.map((pA, i) =>
-                  activePlayers.slice(i + 1).map((pB) => {
-                    const aFouled = roundResults[pA.uid]?.fouled ?? false;
-                    const bFouled = roundResults[pB.uid]?.fouled ?? false;
-                    const result = scorePairwise(
-                      pA.uid, aFouled, pA.board,
-                      pB.uid, bFouled, pB.board,
-                    );
-                    return (
-                      <div key={`${pA.uid}-${pB.uid}`} className="flex justify-between gap-2 mb-1">
-                        <span className="text-gray-400 truncate">{pA.displayName} vs {pB.displayName}</span>
-                        <span className="whitespace-nowrap">
-                          {pairwiseLabel(result.rowPoints, result.scoopBonus, result.total, aFouled, bFouled)}
-                        </span>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            )}
+            <PairwiseBreakdown players={activePlayers} roundResults={roundResults} />
           </div>
         )}
 

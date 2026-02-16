@@ -24,35 +24,16 @@ const SUIT_SELECTED_RING: Record<string, string> = {
   c: 'ring-green-300',
 };
 
-export type CardSize = 'xs' | 'sm' | 'md' | 'lg';
-
-const SIZE_CLASSES: Record<CardSize, string> = {
-  xs: 'w-6 h-8 text-[7px] rounded-sm',
-  sm: 'w-8 h-11 text-[10px] rounded',
-  md: 'w-10 h-14 text-xs rounded-md',
-  lg: 'w-14 h-20 text-sm rounded-lg',
-};
-
-const RANK_SIZE: Record<CardSize, string> = {
-  xs: 'text-[10px] leading-none',
-  sm: 'text-sm leading-none',
-  md: 'text-base leading-none',
-  lg: 'text-xl leading-none',
-};
-
 export const CARD_ASPECT = 1.4;
 
 interface CardProps {
   card: Card | null;
-  faceDown?: boolean;
+  widthPx: number;
   selected?: boolean;
   onClick?: () => void;
-  size?: CardSize;
-  /** Pixel width — when set, card dimensions are computed from this instead of size presets. */
-  widthPx?: number;
 }
 
-function pxStyles(w: number) {
+function cardStyles(w: number) {
   return {
     card: {
       width: w,
@@ -66,25 +47,16 @@ function pxStyles(w: number) {
   };
 }
 
-export function CardComponent({ card, faceDown, selected, onClick, size, widthPx }: CardProps) {
-  const px = widthPx !== undefined;
-  const resolvedSize: CardSize = size ?? 'lg';
-  const ps = px ? pxStyles(widthPx!) : null;
-  const sizeClass = px ? '' : SIZE_CLASSES[resolvedSize];
-  const rankClass = px ? '' : RANK_SIZE[resolvedSize];
+export function CardComponent({ card, widthPx, selected, onClick }: CardProps) {
+  const s = cardStyles(widthPx);
 
-  if (!card || faceDown) {
+  if (!card) {
     return (
       <div
-        className={`
-          ${sizeClass}
-          border-2 border-gray-600 bg-gray-800
-          flex items-center justify-center cursor-default
-          bg-[repeating-linear-gradient(45deg,transparent,transparent_4px,rgba(255,255,255,0.05)_4px,rgba(255,255,255,0.05)_8px)]
-        `}
-        style={ps?.card}
+        className="border-2 border-gray-600 bg-gray-800 flex items-center justify-center cursor-default bg-[repeating-linear-gradient(45deg,transparent,transparent_4px,rgba(255,255,255,0.05)_4px,rgba(255,255,255,0.05)_8px)]"
+        style={s.card}
       >
-        {!card && <span className="text-gray-500">-</span>}
+        <span className="text-gray-500">-</span>
       </div>
     );
   }
@@ -98,15 +70,14 @@ export function CardComponent({ card, faceDown, selected, onClick, size, widthPx
     <div
       onClick={onClick}
       className={`
-        ${sizeClass}
         border-2 ${bg} ${border} flex flex-col items-center justify-center
         font-bold select-none transition-all text-white
         ${selected ? `border-yellow-400 ring-2 ${ring} -translate-y-2 shadow-lg shadow-yellow-900/30` : ''}
         ${onClick ? 'cursor-pointer hover:brightness-125 hover:-translate-y-1' : 'cursor-default'}
       `}
-      style={ps?.card}
+      style={s.card}
     >
-      <span className={rankClass} style={ps?.rank}>{rank}</span>
+      <span style={s.rank}>{rank}</span>
     </div>
   );
 }
