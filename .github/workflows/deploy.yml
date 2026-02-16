@@ -54,7 +54,7 @@ jobs:
           echo "GOOGLE_APPLICATION_CREDENTIALS=/tmp/sa-key.json" >> "$GITHUB_ENV"
 
       - name: Deploy to Firebase
-        run: npx firebase-tools deploy --project pineapple-poker-8f3 --force
+        run: npx firebase-tools deploy --project pineapple-poker-8f3
 
       - name: Clean up credentials
         if: always()
