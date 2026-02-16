@@ -75,12 +75,11 @@ interface PlayerBoardProps {
   hasPlaced?: boolean;
   isObserver?: boolean;
   disconnected?: boolean;
-  isBot?: boolean;
 }
 
 export function PlayerBoard({
   board, playerName, fouled, isCurrentPlayer, onRowClick, hasCardSelected, small,
-  cardSize, score, hasPlaced, isObserver, disconnected, isBot,
+  cardSize, score, hasPlaced, isObserver, disconnected,
 }: PlayerBoardProps) {
   const size: CardSize = cardSize ?? (small ? 'md' : 'lg');
   const topSlots = padRow(board.top, 3);
@@ -116,7 +115,6 @@ export function PlayerBoard({
         )}
         {disconnected && <span className="text-xs text-red-500">[DC]</span>}
         {isObserver && <span className="text-xs text-blue-400">[OBS]</span>}
-        {isBot && <span className="text-xs text-cyan-400">[BOT]</span>}
       </div>
 
       {/* Top row - 3 cards, centered */}

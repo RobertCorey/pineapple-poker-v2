@@ -102,7 +102,6 @@ export interface PlayerState {
   disconnected: boolean;
   fouled: boolean;
   score: number;
-  isBot?: boolean;
 }
 
 /** Subcollection document: games/{roomId}/hands/{uid} */
