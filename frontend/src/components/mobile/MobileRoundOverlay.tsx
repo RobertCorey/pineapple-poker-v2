@@ -4,6 +4,7 @@ import { scorePairwise } from '@shared/game-logic/scoring';
 interface MobileRoundOverlayProps {
   gameState: GameState;
   currentUid: string;
+  onClose?: () => void;
 }
 
 function formatScore(n: number): string {
@@ -17,14 +18,14 @@ function pairwiseLabel(rowPoints: number, scoopBonus: number, total: number, aFo
   return `rows ${formatScore(rowPoints)} = ${formatScore(total)}`;
 }
 
-export function MobileRoundOverlay({ gameState, currentUid }: MobileRoundOverlayProps) {
+export function MobileRoundOverlay({ gameState, currentUid, onClose }: MobileRoundOverlayProps) {
   const players = gameState.playerOrder.map((uid) => gameState.players[uid]).filter(Boolean);
   const roundResults = gameState.roundResults ?? {};
 
   return (
-    <div data-testid="mobile-round-overlay" className="fixed inset-0 bg-gray-900 z-50 flex flex-col items-center justify-center px-6 font-mono">
+    <div data-testid="round-results" className="fixed inset-0 bg-gray-900 z-50 flex flex-col items-center justify-center px-6 font-mono">
       <h2 className="text-lg font-bold text-white mb-6">
-        Round {gameState.round}/{gameState.totalRounds}
+        Round {gameState.round} of {gameState.totalRounds} Complete
       </h2>
 
       {/* Score table */}
@@ -89,7 +90,17 @@ export function MobileRoundOverlay({ gameState, currentUid }: MobileRoundOverlay
         </div>
       )}
 
-      <p className="text-xs text-gray-500 animate-pulse">Next round starting...</p>
+      {onClose ? (
+        <button
+          data-testid="close-results"
+          onClick={onClose}
+          className="px-6 py-2 bg-gray-700 hover:bg-gray-600 active:bg-gray-800 text-white text-sm rounded-lg"
+        >
+          Close
+        </button>
+      ) : (
+        <p className="text-xs text-gray-500 animate-pulse">Next round starting...</p>
+      )}
     </div>
   );
 }

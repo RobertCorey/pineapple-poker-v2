@@ -4,9 +4,11 @@ import { PlayerBoard } from '../PlayerBoard.tsx';
 interface MobileOpponentGridProps {
   gameState: GameState;
   currentUid: string;
+  cardWidthPx: number;
+  cols: number;
 }
 
-export function MobileOpponentGrid({ gameState, currentUid }: MobileOpponentGridProps) {
+export function MobileOpponentGrid({ gameState, currentUid, cardWidthPx, cols }: MobileOpponentGridProps) {
   const otherPlayers = gameState.playerOrder.filter((uid) => uid !== currentUid);
   const expectedCards = gameState.street === 1 ? 5 : 3 + 2 * gameState.street;
 
@@ -22,33 +24,34 @@ export function MobileOpponentGrid({ gameState, currentUid }: MobileOpponentGrid
     );
   }
 
-  // 3-column grid, centered when fewer than 3
-  const gridCols = otherPlayers.length === 1
-    ? 'flex justify-center'
-    : otherPlayers.length === 2
-    ? 'grid grid-cols-2 gap-1'
-    : 'grid grid-cols-3 gap-1';
+  const boardGap = Math.max(2, Math.round(cardWidthPx * 0.15));
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex-1 overflow-y-auto overflow-x-hidden p-1">
-        <div className={gridCols}>
+      <div className="flex-1 flex items-center justify-center">
+        <div
+          className="grid"
+          style={{
+            gridTemplateColumns: `repeat(${cols}, auto)`,
+            gap: boardGap,
+            justifyItems: 'center',
+          }}
+        >
           {otherPlayers.map((uid) => {
             const player = gameState.players[uid];
             if (!player) return null;
             const boardCount = player.board.top.length + player.board.middle.length + player.board.bottom.length;
             return (
-              <div key={uid} className={otherPlayers.length === 1 ? 'w-40' : ''}>
-                <PlayerBoard
-                  board={player.board}
-                  playerName={player.displayName}
-                  fouled={player.fouled}
-                  cardSize="xs"
-                  score={player.score}
-                  hasPlaced={boardCount >= expectedCards}
-                  disconnected={player.disconnected}
-                />
-              </div>
+              <PlayerBoard
+                key={uid}
+                board={player.board}
+                playerName={player.displayName}
+                fouled={player.fouled}
+                cardWidthPx={cardWidthPx}
+                score={player.score}
+                hasPlaced={boardCount >= expectedCards}
+                disconnected={player.disconnected}
+              />
             );
           })}
         </div>

@@ -1,7 +1,6 @@
+import type { CSSProperties } from 'react';
 import type { Board, Card, Row } from '@shared/core/types';
-import { evaluate5CardHand, evaluate3CardHand } from '@shared/game-logic/hand-evaluation';
-import { describeHand, describe3CardHand } from '../utils/handDescription.ts';
-import { CardComponent } from './CardComponent.tsx';
+import { CardComponent, CARD_ASPECT } from './CardComponent.tsx';
 import type { CardSize } from './CardComponent.tsx';
 
 const SPACER_W: Record<CardSize, string> = {
@@ -21,24 +20,30 @@ const EMPTY_SLOT: Record<CardSize, string> = {
 interface SlotProps {
   card: Card | null;
   size?: CardSize;
+  widthPx?: number;
 }
 
-function CardSlot({ card, size = 'lg' }: SlotProps) {
+function CardSlot({ card, size = 'lg', widthPx }: SlotProps) {
+  if (card) {
+    return <CardComponent card={card} size={size} widthPx={widthPx} />;
+  }
+
+  const pxStyle: CSSProperties | undefined = widthPx !== undefined ? {
+    width: widthPx,
+    height: Math.round(widthPx * CARD_ASPECT),
+    borderRadius: Math.max(2, Math.round(widthPx * 0.1)),
+  } : undefined;
+
   return (
-    <div>
-      {card ? (
-        <CardComponent card={card} size={size} />
-      ) : (
-        <div
-          className={`
-            ${EMPTY_SLOT[size]}
-            border-2 border-dashed
-            flex items-center justify-center
-            border-gray-600 bg-gray-800/30
-          `}
-        />
-      )}
-    </div>
+    <div
+      className={`
+        ${widthPx !== undefined ? '' : EMPTY_SLOT[size]}
+        border-2 border-dashed
+        flex items-center justify-center
+        border-gray-600 bg-gray-800/30
+      `}
+      style={pxStyle}
+    />
   );
 }
 
@@ -48,19 +53,6 @@ function padRow(cards: Card[], size: number): (Card | null)[] {
   return result;
 }
 
-function RowEval({ cards, size, isTop }: { cards: Card[]; size: number; isTop: boolean }) {
-  if (cards.length === size) {
-    const label = isTop
-      ? describe3CardHand(evaluate3CardHand(cards))
-      : describeHand(evaluate5CardHand(cards));
-    return <div className="text-center text-[10px] text-gray-500 -mt-0.5 mb-0.5">{label}</div>;
-  }
-  if (cards.length > 0) {
-    return <div className="text-center text-[10px] text-gray-600 -mt-0.5 mb-0.5">({cards.length}/{size})</div>;
-  }
-  return null;
-}
-
 interface PlayerBoardProps {
   board: Board;
   playerName: string;
@@ -68,9 +60,9 @@ interface PlayerBoardProps {
   isCurrentPlayer?: boolean;
   onRowClick?: (row: Row) => void;
   hasCardSelected?: boolean;
-  /** @deprecated use `cardSize` instead */
-  small?: boolean;
   cardSize?: CardSize;
+  /** Pixel width for cards — overrides cardSize when set. */
+  cardWidthPx?: number;
   score?: number;
   hasPlaced?: boolean;
   isObserver?: boolean;
@@ -79,10 +71,11 @@ interface PlayerBoardProps {
 }
 
 export function PlayerBoard({
-  board, playerName, fouled, isCurrentPlayer, onRowClick, hasCardSelected, small,
-  cardSize, score, hasPlaced, isObserver, disconnected, isBot,
+  board, playerName, fouled, isCurrentPlayer, onRowClick, hasCardSelected,
+  cardSize, cardWidthPx, score, hasPlaced, isObserver, disconnected, isBot,
 }: PlayerBoardProps) {
-  const size: CardSize = cardSize ?? (small ? 'md' : 'lg');
+  const size: CardSize = cardSize ?? 'lg';
+  const px = cardWidthPx !== undefined;
   const topSlots = padRow(board.top, 3);
   const middleSlots = padRow(board.middle, 5);
   const bottomSlots = padRow(board.bottom, 5);
@@ -94,77 +87,95 @@ export function PlayerBoard({
   const rowClickable = (hasSpace: boolean) =>
     isCurrentPlayer && hasCardSelected && onRowClick && hasSpace;
 
-  const isSmallText = size === 'sm' || size === 'md';
+  // Pixel-mode: proportional gap and padding
+  const gap = px ? Math.max(2, Math.round(cardWidthPx! * 0.06)) : undefined;
+  const boardPad = px ? Math.max(4, Math.round(cardWidthPx! * 0.12)) : undefined;
+  const headerFs = px ? Math.max(8, Math.round(cardWidthPx! * 0.22)) : undefined;
+
+  const isSmallText = !px && (size === 'sm' || size === 'md');
+
+  const rowClass = (clickable: boolean) => `
+    flex justify-center ${px ? '' : 'gap-1'} rounded px-1 py-0.5 transition-colors
+    ${clickable ? 'cursor-pointer bg-yellow-900/20 hover:bg-yellow-900/40 ring-1 ring-yellow-500/40' : ''}
+  `;
+
+  // In pixel mode, constrain board width so long names don't stretch the grid
+  // Board width = 5 cards + 4 gaps + 2 spacers (top row) + 2*padding + 2*border
+  const boardMaxW = px
+    ? 5 * cardWidthPx! + 4 * gap! + 2 * boardPad! + 4
+    : undefined;
 
   return (
-    <div className={`
-      border p-2
-      ${isCurrentPlayer ? 'border-green-600 bg-green-900/20' : 'border-gray-700 bg-gray-800/20'}
-    `}>
-      <div className={`text-center mb-1 ${isSmallText ? 'text-xs' : 'text-sm'} text-gray-300 flex items-center justify-center gap-2`}>
-        <span>{playerName}</span>
+    <div
+      className={`
+        border overflow-hidden
+        ${px ? '' : 'p-2'}
+        ${isCurrentPlayer ? 'border-green-600 bg-green-900/20' : 'border-gray-700 bg-gray-800/20'}
+      `}
+      style={boardPad !== undefined ? { padding: boardPad, maxWidth: boardMaxW } : undefined}
+    >
+      <div
+        className={`text-center mb-1 ${!px ? (isSmallText ? 'text-xs' : 'text-sm') : ''} text-gray-300 flex items-center justify-center gap-1 flex-wrap`}
+        style={headerFs ? { fontSize: headerFs, lineHeight: '1.2' } : undefined}
+      >
+        <span className="truncate max-w-[10em]">{playerName}</span>
         {score !== undefined && (
-          <span className={`text-xs ${score >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+          <span className={score >= 0 ? 'text-green-400' : 'text-red-400'}>
             [{score >= 0 ? `+${score}` : score}]
           </span>
         )}
         {hasPlaced !== undefined && (
-          <span className="text-xs">{hasPlaced ? '\u2713' : '\u00b7'}</span>
+          <span>{hasPlaced ? '\u2713' : '\u00b7'}</span>
         )}
-        {fouled && (
-          <span className="text-xs text-red-400">[FOULED]</span>
-        )}
-        {disconnected && <span className="text-xs text-red-500">[DC]</span>}
-        {isObserver && <span className="text-xs text-blue-400">[OBS]</span>}
-        {isBot && <span className="text-xs text-cyan-400">[BOT]</span>}
+        {fouled && <span className="text-red-400">[F]</span>}
+        {disconnected && <span className="text-red-500">[DC]</span>}
+        {isObserver && <span className="text-blue-400">[OBS]</span>}
+        {isBot && <span className="text-cyan-400">[BOT]</span>}
       </div>
 
-      {/* Top row - 3 cards, centered */}
+      {/* Top row - 3 cards, centered with spacers to match 5-card row width */}
       <div
         data-testid="row-top"
         onClick={rowClickable(topHasSpace) ? () => onRowClick!('top' as Row) : undefined}
-        className={`
-          flex justify-center gap-1 mb-1 rounded px-1 py-0.5 transition-colors
-          ${rowClickable(topHasSpace) ? 'cursor-pointer bg-yellow-900/20 hover:bg-yellow-900/40 ring-1 ring-yellow-500/40' : ''}
-        `}
+        className={`${rowClass(!!rowClickable(topHasSpace))} mb-1`}
+        style={gap ? { gap } : undefined}
       >
-        <div className={SPACER_W[size]} />
+        {px
+          ? <div style={{ width: cardWidthPx }} />
+          : <div className={SPACER_W[size]} />
+        }
         {topSlots.map((card, i) => (
-          <CardSlot key={`top-${i}`} card={card} size={size} />
+          <CardSlot key={`top-${i}`} card={card} size={size} widthPx={cardWidthPx} />
         ))}
-        <div className={SPACER_W[size]} />
+        {px
+          ? <div style={{ width: cardWidthPx }} />
+          : <div className={SPACER_W[size]} />
+        }
       </div>
-      <RowEval cards={board.top} size={3} isTop />
 
       {/* Middle row - 5 cards */}
       <div
         data-testid="row-middle"
         onClick={rowClickable(middleHasSpace) ? () => onRowClick!('middle' as Row) : undefined}
-        className={`
-          flex justify-center gap-1 mb-1 rounded px-1 py-0.5 transition-colors
-          ${rowClickable(middleHasSpace) ? 'cursor-pointer bg-yellow-900/20 hover:bg-yellow-900/40 ring-1 ring-yellow-500/40' : ''}
-        `}
+        className={`${rowClass(!!rowClickable(middleHasSpace))} mb-1`}
+        style={gap ? { gap } : undefined}
       >
         {middleSlots.map((card, i) => (
-          <CardSlot key={`mid-${i}`} card={card} size={size} />
+          <CardSlot key={`mid-${i}`} card={card} size={size} widthPx={cardWidthPx} />
         ))}
       </div>
-      <RowEval cards={board.middle} size={5} isTop={false} />
 
       {/* Bottom row - 5 cards */}
       <div
         data-testid="row-bottom"
         onClick={rowClickable(bottomHasSpace) ? () => onRowClick!('bottom' as Row) : undefined}
-        className={`
-          flex justify-center gap-1 rounded px-1 py-0.5 transition-colors
-          ${rowClickable(bottomHasSpace) ? 'cursor-pointer bg-yellow-900/20 hover:bg-yellow-900/40 ring-1 ring-yellow-500/40' : ''}
-        `}
+        className={rowClass(!!rowClickable(bottomHasSpace))}
+        style={gap ? { gap } : undefined}
       >
         {bottomSlots.map((card, i) => (
-          <CardSlot key={`bot-${i}`} card={card} size={size} />
+          <CardSlot key={`bot-${i}`} card={card} size={size} widthPx={cardWidthPx} />
         ))}
       </div>
-      <RowEval cards={board.bottom} size={5} isTop={false} />
     </div>
   );
 }

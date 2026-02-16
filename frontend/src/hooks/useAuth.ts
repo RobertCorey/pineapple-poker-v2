@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { signInAnonymously, onAuthStateChanged, type User } from 'firebase/auth';
+import { signInAnonymously, signInWithCustomToken, onAuthStateChanged, type User } from 'firebase/auth';
 import { auth } from '../firebase.ts';
 
 const DISPLAY_NAME_KEY = 'pineapple_display_name';
@@ -16,6 +16,16 @@ export function useAuth() {
       setUser(u);
       setLoading(false);
     });
+
+    // Auto sign-in with bot token if present (spectate mode)
+    const params = new URLSearchParams(window.location.search);
+    const botToken = params.get('botToken');
+    if (botToken && !auth.currentUser) {
+      signInWithCustomToken(auth, botToken).catch((err) => {
+        console.error('Bot token sign-in failed:', err);
+      });
+    }
+
     return unsub;
   }, []);
 
