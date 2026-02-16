@@ -2,7 +2,10 @@ import { useState, useEffect } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase.ts';
 import type { Card } from '@shared/core/types';
-import { parseHandDoc } from '@shared/core/schemas';
+
+interface HandDoc {
+  cards: Card[];
+}
 
 export function usePlayerHand(uid: string | undefined, roomId: string | null) {
   const [hand, setHand] = useState<Card[]>([]);
@@ -13,7 +16,7 @@ export function usePlayerHand(uid: string | undefined, roomId: string | null) {
       doc(db, 'games', roomId, 'hands', uid),
       (snap) => {
         if (snap.exists()) {
-          const data = parseHandDoc(snap.data());
+          const data = snap.data() as HandDoc;
           setHand(data.cards ?? []);
         } else {
           setHand([]);
