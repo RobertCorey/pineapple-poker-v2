@@ -21,12 +21,12 @@ export const TOTAL_STREETS = 5;
 /** Number of rounds per match. */
 export const ROUNDS_PER_MATCH = 3;
 
-/** Turn timeout durations in milliseconds */
-export const INITIAL_DEAL_TIMEOUT_MS = 30_000;  // 30 seconds
-export const STREET_TIMEOUT_MS = 20_000;         // 20 seconds
-
-/** Delay between rounds before auto-starting next */
-export const INTER_ROUND_DELAY_MS = 5_000;       // 5 seconds
+/** Default match settings applied when creating a new room */
+import type { MatchSettings } from './types';
+export const DEFAULT_MATCH_SETTINGS: MatchSettings = {
+  turnTimeoutMs: 30_000,
+  interRoundDelayMs: 5_000,
+};
 
 /** Maximum players per room. */
 export const MAX_PLAYERS = 16;

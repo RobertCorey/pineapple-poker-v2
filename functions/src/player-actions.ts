@@ -11,10 +11,11 @@ import {
   FIVE_CARD_ROW_SIZE,
   ROUNDS_PER_MATCH,
   MAX_PLAYERS,
+  DEFAULT_MATCH_SETTINGS,
 } from '../../shared/core/constants';
 import { gameDoc, handDoc, deckDoc } from '../../shared/core/firestore-paths';
 import { emptyBoard } from '../../shared/game-logic/board-utils';
-import { parseGameState, CardSchema } from '../../shared/core/schemas';
+import { parseGameState, CardSchema, MatchSettingsSchema } from '../../shared/core/schemas';
 import { pickBotName } from '../../shared/core/bot-names';
 
 const db = () => admin.firestore();
@@ -155,6 +156,7 @@ export const joinGame = onCall({ maxInstances: 10 }, async (request) => {
         round: 0,
         totalRounds: ROUNDS_PER_MATCH,
         hostUid: uid,
+        settings: DEFAULT_MATCH_SETTINGS,
         createdAt: now,
         updatedAt: now,
         phaseDeadline: null,
@@ -340,13 +342,21 @@ export const placeCards = onCall({ maxInstances: 10 }, async (request) => {
 
 // ---- startMatch ----
 
+const StartMatchSchema = RoomIdSchema.extend({
+  settings: MatchSettingsSchema.optional(),
+});
+
 export const startMatch = onCall({ maxInstances: 10 }, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) {
     throw new HttpsError('unauthenticated', 'Must be signed in.');
   }
 
-  const roomId = extractRoomId(request.data);
+  const parsed = StartMatchSchema.safeParse(request.data);
+  if (!parsed.success) {
+    throw new HttpsError('invalid-argument', 'Invalid request data.');
+  }
+  const { roomId, settings } = parsed.data;
   const gameRef = db().doc(gameDoc(roomId));
 
   await db().runTransaction(async (tx) => {
@@ -371,11 +381,18 @@ export const startMatch = onCall({ maxInstances: 10 }, async (request) => {
       throw new HttpsError('failed-precondition', 'Need at least 2 players to start.');
     }
 
-    // Set round to 1 — dealer will pick up the snapshot and call maybeStartRound
-    tx.update(gameRef, {
-      round: 1,
-      updatedAt: Date.now(),
-    });
+    if (settings) {
+      tx.update(gameRef, {
+        round: 1,
+        settings,
+        updatedAt: Date.now(),
+      });
+    } else {
+      tx.update(gameRef, {
+        round: 1,
+        updatedAt: Date.now(),
+      });
+    }
   });
 
   return { success: true };

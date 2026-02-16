@@ -10,9 +10,6 @@ import {
   INITIAL_DEAL_COUNT,
   STREET_DEAL_COUNT,
   TOTAL_STREETS,
-  INITIAL_DEAL_TIMEOUT_MS,
-  STREET_TIMEOUT_MS,
-  INTER_ROUND_DELAY_MS,
   TOP_ROW_SIZE,
   FIVE_CARD_ROW_SIZE,
 } from '../../shared/core/constants';
@@ -72,7 +69,7 @@ export async function maybeStartRound(db: Firestore, roomId: string): Promise<bo
 
     // Deal cards to all players in playerOrder
     const now = Date.now();
-    const phaseDeadline = now + INITIAL_DEAL_TIMEOUT_MS;
+    const phaseDeadline = now + game.settings.turnTimeoutMs;
     const updatedPlayers: Record<string, PlayerState> = {};
 
     for (const uid of game.playerOrder) {
@@ -167,7 +164,7 @@ export async function advanceStreet(db: Firestore, roomId: string): Promise<'sco
     // Now do all writes
     const nextStreet = game.street + 1;
     const nextPhase = phaseForStreet(nextStreet);
-    const phaseDeadline = Date.now() + STREET_TIMEOUT_MS;
+    const phaseDeadline = Date.now() + game.settings.turnTimeoutMs;
     const updatedPlayers: Record<string, PlayerState> = {};
 
     for (const uid of game.playerOrder) {
@@ -260,7 +257,7 @@ export async function scoreRound(db: Firestore, roomId: string): Promise<void> {
       phase: isFinalRound ? GP.MatchComplete : GP.Complete,
       roundResults,
       players: updatedPlayers,
-      phaseDeadline: isFinalRound ? null : Date.now() + INTER_ROUND_DELAY_MS,
+      phaseDeadline: isFinalRound ? null : Date.now() + game.settings.interRoundDelayMs,
       updatedAt: Date.now(),
     });
   });

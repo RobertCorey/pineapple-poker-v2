@@ -67,6 +67,7 @@ async function setGameState(roomId: string, state: Partial<GameState>) {
     hostUid: 'p1',
     playerOrder: [],
     players: {},
+    settings: { turnTimeoutMs: 30_000, interRoundDelayMs: 5_000 },
     phaseDeadline: null,
     createdAt: Date.now(),
     updatedAt: Date.now(),

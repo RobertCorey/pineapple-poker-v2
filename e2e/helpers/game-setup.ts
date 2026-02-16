@@ -23,16 +23,17 @@ export interface ThreePlayerGame extends TwoPlayerGame {
  * Create a two-player game in the lobby, ready to start.
  * Alice is host (sees Start Match), Bob is waiting.
  */
-export async function setupTwoPlayerGame(browser: Browser): Promise<TwoPlayerGame> {
+export async function setupTwoPlayerGame(browser: Browser, opts?: { timeout?: number }): Promise<TwoPlayerGame> {
   const roomId = generateRoomCode();
+  const timeoutParam = opts?.timeout ? `&timeout=${opts.timeout}` : '';
 
   const ctx1 = await browser.newContext();
   const ctx2 = await browser.newContext();
   const alice = await ctx1.newPage();
   const bob = await ctx2.newPage();
 
-  await alice.goto(`/?room=${roomId}`);
-  await bob.goto(`/?room=${roomId}`);
+  await alice.goto(`/?room=${roomId}${timeoutParam}`);
+  await bob.goto(`/?room=${roomId}${timeoutParam}`);
 
   await alice.getByTestId('name-input').fill('Alice');
   await alice.getByTestId('join-button').click();
