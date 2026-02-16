@@ -56,8 +56,11 @@ jobs:
 
       - run: npm ci
 
-      - name: Install Firebase CLI
-        run: npm install -g firebase-tools
+      - name: Install Firebase CLI and emulators
+        run: |
+          npm install -g firebase-tools
+          firebase setup:emulators:firestore
+          firebase setup:emulators:ui
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
