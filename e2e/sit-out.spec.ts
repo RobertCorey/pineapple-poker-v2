@@ -44,10 +44,7 @@ test('timed-out player gets auto-placed and is active in next round', async ({ b
   // Verify round results show up with round info
   await expect(alice.getByTestId('round-results')).toContainText('Round 1 of 3 Complete');
 
-  // Close results
-  await alice.getByTestId('close-results').click();
-  await bob.getByTestId('close-results').click();
-
+  // Overlay auto-dismisses when next round starts
   // --- Round 2: Bob should be ACTIVE (not sitting out), both play ---
   await expect(alice.getByTestId('phase-label')).toContainText('initial_deal', { timeout: T_PHASE });
   await expect(bob.getByTestId('phase-label')).toContainText('initial_deal', { timeout: T_PHASE });

@@ -85,8 +85,8 @@ async function playRound(page: Page) {
   }
 
   console.log(`[${BOT_NAME}] Round complete!`);
-  await page.waitForTimeout(3_000);
-  await roundResults.getByTestId('close-results').click();
+  // Overlay auto-dismisses when next round starts
+  await roundResults.waitFor({ state: 'hidden', timeout: 15_000 });
   return 'round_complete';
 }
 

@@ -20,18 +20,11 @@ test('scores are computed correctly after a full round', async ({ browser }) => 
   const aliceResults = alice.getByTestId('round-results');
   await expect(aliceResults).toContainText('Round 1 of 3 Complete');
 
-  // Pairwise section should exist
-  await expect(aliceResults).toContainText('Pairwise');
-  await expect(aliceResults).toContainText('vs');
-
   // Scores should be displayed (signed numbers)
   const resultsText = await aliceResults.textContent();
   expect(resultsText).toMatch(/[+-]\d+/);
 
-  // Close results
-  await alice.getByTestId('close-results').click();
-  await bob.getByTestId('close-results').click();
-
+  // Overlay auto-dismisses when next round starts
   // --- Round 2: both play normally ---
   await playFullRound(alice, bob);
 

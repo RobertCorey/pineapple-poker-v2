@@ -22,11 +22,7 @@ test('two players play a full 3-round match', async ({ browser }) => {
       // Verify round results header
       await expect(alice.getByTestId('round-results')).toContainText(`Round ${round} of 3 Complete`);
 
-      // Close results
-      await alice.getByTestId('close-results').click();
-      await bob.getByTestId('close-results').click();
-
-      // Wait for next round to start (auto-reset -> auto-start)
+      // Wait for overlay to auto-dismiss when next round starts
     } else {
       // After round 3: match-results modal
       await alice.getByTestId('match-results').waitFor({ timeout: T_JOIN });
