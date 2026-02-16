@@ -145,7 +145,7 @@ export function GamePage({ gameState, hand, uid, roomId, onLeaveRoom }: GamePage
         setSubmitting(false);
       }
     }
-  }, [selectedIndex, remainingHand, mergedBoard, placements, submitting, requiredPlacements, isStreet, hand, roomId]);
+  }, [selectedIndex, remainingHand, mergedBoard, placements, submitting, requiredPlacements, isStreet, hand, roomId, gameState.street]);
 
   const handleCloseResults = useCallback(() => {
     setShowResults(false);

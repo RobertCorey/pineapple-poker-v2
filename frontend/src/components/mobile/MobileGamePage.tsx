@@ -130,7 +130,7 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
         setSubmitting(false);
       }
     }
-  }, [selectedIndex, remainingHand, mergedBoard, placements, submitting, requiredPlacements, isStreet, hand, roomId]);
+  }, [selectedIndex, remainingHand, mergedBoard, placements, submitting, requiredPlacements, isStreet, hand, roomId, gameState.street]);
 
   const handleLeave = useCallback(async () => {
     setLeaving(true);
