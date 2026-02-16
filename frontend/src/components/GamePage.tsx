@@ -7,7 +7,7 @@ import { OpponentGrid, PlayerSection } from './PlayerGrid.tsx';
 import { HandPanel } from './HandPanel.tsx';
 import { RoundResults } from './RoundResults.tsx';
 import { MatchResults } from './MatchResults.tsx';
-import { DebugPanel } from './DebugPanel.tsx';
+
 import { useCountdown } from '../hooks/useCountdown.ts';
 
 function cardKey(c: Card): string {
@@ -34,7 +34,7 @@ export function GamePage({ gameState, hand, uid, roomId, onLeaveRoom }: GamePage
   const [submitting, setSubmitting] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const [debugOpen, setDebugOpen] = useState(false);
+
 
   // Auto-dismiss toast after 3 seconds
   useEffect(() => {
@@ -183,12 +183,7 @@ export function GamePage({ gameState, hand, uid, roomId, onLeaveRoom }: GamePage
           <span className="text-gray-500">
             {gameState.playerOrder.length} playing, {Object.keys(gameState.players).length} total
           </span>
-          <button
-            onClick={() => setDebugOpen((o) => !o)}
-            className={`px-2 py-1 text-xs border ${debugOpen ? 'bg-yellow-900 border-yellow-700 text-yellow-300' : 'bg-gray-800 border-gray-600 text-gray-400'}`}
-          >
-            [DBG]
-          </button>
+
           <button
             onClick={handleLeave}
             disabled={leaving}
@@ -239,13 +234,7 @@ export function GamePage({ gameState, hand, uid, roomId, onLeaveRoom }: GamePage
         </div>
       </div>
 
-      {/* Debug panel overlay */}
-      {debugOpen && (
-        <DebugPanel
-          gameState={gameState}
-          currentUid={uid}
-        />
-      )}
+
 
       {/* Round results modal (inter-round, not final) */}
       {showResults && isRoundComplete && !isMatchComplete && (
