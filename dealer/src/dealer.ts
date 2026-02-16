@@ -87,13 +87,7 @@ export class Dealer {
   }
 
   private onGameSnapshot(roomId: string, doc: FirebaseFirestore.QueryDocumentSnapshot): void {
-    let game: GameState;
-    try {
-      game = parseGameState(doc.data());
-    } catch (err) {
-      console.error(`[Dealer] [${roomId}] Skipping unparseable game document:`, err);
-      return;
-    }
+    const game = parseGameState(doc.data());
 
     console.log(`[Dealer] [${roomId}] Snapshot: phase=${game.phase}, street=${game.street}, players=${game.playerOrder.length}`);
 
