@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useMemo } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import type { GameState, Card, Row, Board } from '@shared/core/types';
 import { GamePhase } from '@shared/core/types';
-import { functions } from '../../firebase.ts';
+import { functions, trackEvent } from '../../firebase.ts';
 import { PlayerBoard } from '../PlayerBoard.tsx';
 import { useCountdown } from '../../hooks/useCountdown.ts';
 import { MobileOpponentGrid } from './MobileOpponentGrid.tsx';
@@ -122,6 +122,7 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
 
         const placeCardsFn = httpsCallable(functions, 'placeCards');
         await placeCardsFn({ roomId, placements: placementData, discard });
+        trackEvent('place_cards', { roomId, street: gameState.street });
       } catch (err) {
         console.error('Failed to place cards:', err);
         setToast('Failed to place cards');
@@ -136,6 +137,7 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
     try {
       const leaveGameFn = httpsCallable(functions, 'leaveGame');
       await leaveGameFn({ roomId });
+      trackEvent('leave_game', { roomId });
       onLeaveRoom();
     } catch (err) {
       console.error('Failed to leave:', err);

@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import type { GameState } from '@shared/core/types';
 import { scorePairwise } from '@shared/game-logic/scoring';
-import { functions } from '../../firebase.ts';
+import { functions, trackEvent } from '../../firebase.ts';
 
 interface MobileMatchOverlayProps {
   gameState: GameState;
@@ -40,6 +40,7 @@ export function MobileMatchOverlay({ gameState, currentUid, roomId }: MobileMatc
     try {
       const playAgainFn = httpsCallable(functions, 'playAgain');
       await playAgainFn({ roomId });
+      trackEvent('play_again', { roomId });
     } catch (err) {
       console.error('Failed to restart:', err);
       setRestarting(false);

@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { httpsCallable } from 'firebase/functions';
-import { functions } from '../firebase.ts';
+import { functions, trackEvent } from '../firebase.ts';
 import type { GameState, MatchSettings } from '@shared/core/types';
 import { DEFAULT_MATCH_SETTINGS } from '@shared/core/constants';
 
@@ -52,6 +52,7 @@ export function Lobby({ uid, displayName, setDisplayName, signIn, gameState, isI
       await signIn();
       const joinGame = httpsCallable(functions, 'joinGame');
       await joinGame({ roomId, displayName: nameInput.trim(), create: !gameState });
+      trackEvent('join_room', { roomId });
     } catch (err) {
       console.error('Failed to join:', err);
       setToast('Failed to join game — try again');
@@ -69,6 +70,7 @@ export function Lobby({ uid, displayName, setDisplayName, signIn, gameState, isI
         interRoundDelayMs: DEFAULT_MATCH_SETTINGS.interRoundDelayMs,
       };
       await startMatchFn({ roomId, settings });
+      trackEvent('start_match', { roomId });
     } catch (err) {
       console.error('Failed to start match:', err);
       setToast('Failed to start match');
@@ -81,6 +83,7 @@ export function Lobby({ uid, displayName, setDisplayName, signIn, gameState, isI
     try {
       const leaveGameFn = httpsCallable(functions, 'leaveGame');
       await leaveGameFn({ roomId });
+      trackEvent('leave_game', { roomId });
       onLeaveRoom();
     } catch (err) {
       console.error('Failed to leave:', err);
