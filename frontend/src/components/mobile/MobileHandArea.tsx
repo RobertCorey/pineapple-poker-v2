@@ -1,4 +1,3 @@
-import { useCallback } from 'react';
 import type { Card, GameState } from '@shared/core/types';
 import { GamePhase } from '@shared/core/types';
 import { CardComponent } from '../CardComponent.tsx';
@@ -35,10 +34,10 @@ export function MobileHandArea({
     ? alreadyPlaced >= 5 && hand.length === 0
     : alreadyPlaced > 0 && hand.length === 0;
 
-  const handleCardClick = useCallback((index: number) => {
+  const handleCardClick = (index: number) => {
     if (submitting) return;
     onSelectCard(selectedIndex === index ? null : index);
-  }, [selectedIndex, submitting, onSelectCard]);
+  };
 
   const allPlaced = placements.length >= requiredPlacements;
 

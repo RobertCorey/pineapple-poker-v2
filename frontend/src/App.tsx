@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from './hooks/useAuth.ts';
 import { useGameState } from './hooks/useGameState.ts';
 import { usePlayerHand } from './hooks/usePlayerHand.ts';
@@ -38,15 +38,15 @@ function App() {
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
 
-  const handleRoomJoined = useCallback((newRoomId: string) => {
+  const handleRoomJoined = (newRoomId: string) => {
     setRoomId(newRoomId);
     setRoomInUrl(newRoomId);
-  }, []);
+  };
 
-  const handleLeaveRoom = useCallback(() => {
+  const handleLeaveRoom = () => {
     setRoomId(null);
     setRoomInUrl(null);
-  }, []);
+  };
 
   if (authLoading) {
     return (

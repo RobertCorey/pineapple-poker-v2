@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import { functions, trackEvent } from '../firebase.ts';
 import type { GameState, MatchSettings } from '@shared/core/types';
@@ -44,7 +44,7 @@ export function Lobby({ uid, displayName, setDisplayName, signIn, gameState, isI
   const isHost = gameState?.hostUid === uid;
   const canStart = isHost && (gameState?.playerOrder.length ?? 0) >= 2;
 
-  const handleJoin = useCallback(async () => {
+  const handleJoin = async () => {
     if (!nameInput.trim()) return;
     setJoining(true);
     try {
@@ -59,9 +59,9 @@ export function Lobby({ uid, displayName, setDisplayName, signIn, gameState, isI
     } finally {
       setJoining(false);
     }
-  }, [nameInput, setDisplayName, signIn, roomId, gameState]);
+  };
 
-  const handleStart = useCallback(async () => {
+  const handleStart = async () => {
     setStarting(true);
     try {
       const startMatchFn = httpsCallable(functions, 'startMatch');
@@ -76,9 +76,9 @@ export function Lobby({ uid, displayName, setDisplayName, signIn, gameState, isI
       setToast('Failed to start match');
       setStarting(false);
     }
-  }, [roomId, turnTimeoutMs]);
+  };
 
-  const handleLeave = useCallback(async () => {
+  const handleLeave = async () => {
     setLeaving(true);
     try {
       const leaveGameFn = httpsCallable(functions, 'leaveGame');
@@ -90,9 +90,9 @@ export function Lobby({ uid, displayName, setDisplayName, signIn, gameState, isI
       setToast('Failed to leave game');
       setLeaving(false);
     }
-  }, [roomId, onLeaveRoom]);
+  };
 
-  const handleAddBot = useCallback(async () => {
+  const handleAddBot = async () => {
     setAddingBot(true);
     try {
       const addBotFn = httpsCallable(functions, 'addBot');
@@ -103,9 +103,9 @@ export function Lobby({ uid, displayName, setDisplayName, signIn, gameState, isI
     } finally {
       setAddingBot(false);
     }
-  }, [roomId]);
+  };
 
-  const handleRemoveBot = useCallback(async (botUid: string) => {
+  const handleRemoveBot = async (botUid: string) => {
     try {
       const removeBotFn = httpsCallable(functions, 'removeBot');
       await removeBotFn({ roomId, botUid });
@@ -113,7 +113,7 @@ export function Lobby({ uid, displayName, setDisplayName, signIn, gameState, isI
       console.error('Failed to remove bot:', err);
       setToast('Failed to remove bot');
     }
-  }, [roomId]);
+  };
 
   // In-game lobby view (waiting for host to start)
   if (isInGame && gameState) {

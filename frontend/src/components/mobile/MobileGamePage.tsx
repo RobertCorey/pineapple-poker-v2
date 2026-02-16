@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import type { GameState, Card, Row, Board } from '@shared/core/types';
 import { GamePhase } from '@shared/core/types';
@@ -75,7 +75,7 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
   const placedCardKeys = new Set(placements.map((p) => cardKey(p.card)));
   const remainingHand = hand.filter((c) => !placedCardKeys.has(cardKey(c)));
 
-  const mergedBoard = useMemo((): Board => {
+  const mergedBoard = ((): Board => {
     const player = gameState.players[uid];
     if (!player) return { top: [], middle: [], bottom: [] };
     const board: Board = {
@@ -92,9 +92,9 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
       }
     }
     return board;
-  }, [gameState.players, uid, placements]);
+  })();
 
-  const handleRowClick = useCallback(async (row: Row) => {
+  const handleRowClick = async (row: Row) => {
     if (selectedIndex === null || submitting) return;
     const card = remainingHand[selectedIndex];
     if (!card) return;
@@ -130,9 +130,9 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
         setSubmitting(false);
       }
     }
-  }, [selectedIndex, remainingHand, mergedBoard, placements, submitting, requiredPlacements, isStreet, hand, roomId, gameState.street]);
+  };
 
-  const handleLeave = useCallback(async () => {
+  const handleLeave = async () => {
     setLeaving(true);
     try {
       const leaveGameFn = httpsCallable(functions, 'leaveGame');
@@ -144,7 +144,7 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
       setToast('Failed to leave game');
       setLeaving(false);
     }
-  }, [roomId, onLeaveRoom]);
+  };
 
   const isObserver = !gameState.playerOrder.includes(uid);
   const currentPlayer = gameState.players[uid];
