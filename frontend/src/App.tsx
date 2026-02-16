@@ -92,13 +92,15 @@ function App() {
   }
 
   return (
-    <MobileGamePage
-      gameState={gameState}
-      hand={hand}
-      uid={user.uid}
-      roomId={roomId}
-      onLeaveRoom={handleLeaveRoom}
-    />
+    <div className="h-[100dvh]">
+      <MobileGamePage
+        gameState={gameState}
+        hand={hand}
+        uid={user.uid}
+        roomId={roomId}
+        onLeaveRoom={handleLeaveRoom}
+      />
+    </div>
   );
 }
 

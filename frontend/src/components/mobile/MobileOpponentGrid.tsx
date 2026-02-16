@@ -1,6 +1,5 @@
 import type { GameState } from '@shared/core/types';
 import { PlayerBoard } from '../PlayerBoard.tsx';
-import { boardCardCount, expectedCardsForStreet } from '../../utils/card-utils.ts';
 
 interface MobileOpponentGridProps {
   gameState: GameState;
@@ -11,8 +10,6 @@ interface MobileOpponentGridProps {
 
 export function MobileOpponentGrid({ gameState, currentUid, cardWidthPx, cols }: MobileOpponentGridProps) {
   const otherPlayers = gameState.playerOrder.filter((uid) => uid !== currentUid);
-  const expectedCards = expectedCardsForStreet(gameState.street);
-
   const observers = Object.values(gameState.players).filter(
     (p) => !gameState.playerOrder.includes(p.uid)
   );
@@ -49,7 +46,6 @@ export function MobileOpponentGrid({ gameState, currentUid, cardWidthPx, cols }:
                 fouled={player.fouled}
                 cardWidthPx={cardWidthPx}
                 score={player.score}
-                hasPlaced={boardCardCount(player.board) >= expectedCards}
                 disconnected={player.disconnected}
               />
             );
