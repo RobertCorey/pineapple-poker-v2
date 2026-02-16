@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react';
-import { httpsCallable } from 'firebase/functions';
-import { functions, trackEvent } from '../firebase.ts';
+import { useState } from 'react';
 import type { GameState, MatchSettings } from '@shared/core/types';
 import { DEFAULT_MATCH_SETTINGS } from '@shared/core/constants';
+import { joinGame, leaveGame, startMatch, addBot, removeBot } from '../api.ts';
+import { trackEvent } from '../firebase.ts';
+import { useToast } from '../hooks/useToast.ts';
+import { Toast } from './Toast.tsx';
 
 interface LobbyProps {
   uid: string;
@@ -21,7 +23,7 @@ export function Lobby({ uid, displayName, setDisplayName, signIn, gameState, isI
   const [starting, setStarting] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [addingBot, setAddingBot] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
+  const { message: toast, showToast } = useToast();
 
   // Match settings — host can configure before starting
   const getInitialTimeout = (): number => {
@@ -34,12 +36,6 @@ export function Lobby({ uid, displayName, setDisplayName, signIn, gameState, isI
   };
   const [turnTimeoutMs, setTurnTimeoutMs] = useState<number>(getInitialTimeout);
 
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(null), 3000);
-    return () => clearTimeout(t);
-  }, [toast]);
-
   const players = gameState ? Object.values(gameState.players) : [];
   const isHost = gameState?.hostUid === uid;
   const canStart = isHost && (gameState?.playerOrder.length ?? 0) >= 2;
@@ -50,12 +46,11 @@ export function Lobby({ uid, displayName, setDisplayName, signIn, gameState, isI
     try {
       setDisplayName(nameInput.trim());
       await signIn();
-      const joinGame = httpsCallable(functions, 'joinGame');
       await joinGame({ roomId, displayName: nameInput.trim(), create: !gameState });
       trackEvent('join_room', { roomId });
     } catch (err) {
       console.error('Failed to join:', err);
-      setToast('Failed to join game — try again');
+      showToast('Failed to join game — try again');
     } finally {
       setJoining(false);
     }
@@ -64,16 +59,15 @@ export function Lobby({ uid, displayName, setDisplayName, signIn, gameState, isI
   const handleStart = async () => {
     setStarting(true);
     try {
-      const startMatchFn = httpsCallable(functions, 'startMatch');
       const settings: MatchSettings = {
         turnTimeoutMs,
         interRoundDelayMs: DEFAULT_MATCH_SETTINGS.interRoundDelayMs,
       };
-      await startMatchFn({ roomId, settings });
+      await startMatch({ roomId, settings });
       trackEvent('start_match', { roomId });
     } catch (err) {
       console.error('Failed to start match:', err);
-      setToast('Failed to start match');
+      showToast('Failed to start match');
       setStarting(false);
     }
   };
@@ -81,13 +75,12 @@ export function Lobby({ uid, displayName, setDisplayName, signIn, gameState, isI
   const handleLeave = async () => {
     setLeaving(true);
     try {
-      const leaveGameFn = httpsCallable(functions, 'leaveGame');
-      await leaveGameFn({ roomId });
+      await leaveGame({ roomId });
       trackEvent('leave_game', { roomId });
       onLeaveRoom();
     } catch (err) {
       console.error('Failed to leave:', err);
-      setToast('Failed to leave game');
+      showToast('Failed to leave game');
       setLeaving(false);
     }
   };
@@ -95,11 +88,10 @@ export function Lobby({ uid, displayName, setDisplayName, signIn, gameState, isI
   const handleAddBot = async () => {
     setAddingBot(true);
     try {
-      const addBotFn = httpsCallable(functions, 'addBot');
-      await addBotFn({ roomId });
+      await addBot({ roomId });
     } catch (err) {
       console.error('Failed to add bot:', err);
-      setToast('Failed to add bot');
+      showToast('Failed to add bot');
     } finally {
       setAddingBot(false);
     }
@@ -107,11 +99,10 @@ export function Lobby({ uid, displayName, setDisplayName, signIn, gameState, isI
 
   const handleRemoveBot = async (botUid: string) => {
     try {
-      const removeBotFn = httpsCallable(functions, 'removeBot');
-      await removeBotFn({ roomId, botUid });
+      await removeBot({ roomId, botUid });
     } catch (err) {
       console.error('Failed to remove bot:', err);
-      setToast('Failed to remove bot');
+      showToast('Failed to remove bot');
     }
   };
 
@@ -203,11 +194,7 @@ export function Lobby({ uid, displayName, setDisplayName, signIn, gameState, isI
             </button>
           </div>
         </div>
-        {toast && (
-          <div className="fixed top-4 left-1/2 -translate-x-1/2 bg-red-900 border border-red-700 px-4 py-2 text-xs text-red-300 shadow-lg z-50">
-            {toast}
-          </div>
-        )}
+        <Toast message={toast} />
       </div>
     );
   }
@@ -269,11 +256,7 @@ export function Lobby({ uid, displayName, setDisplayName, signIn, gameState, isI
           </button>
         </div>
       </div>
-      {toast && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 bg-red-900 border border-red-700 px-4 py-2 text-xs text-red-300 shadow-lg z-50">
-          {toast}
-        </div>
-      )}
+      <Toast message={toast} />
     </div>
   );
 }

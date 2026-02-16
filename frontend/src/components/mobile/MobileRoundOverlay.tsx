@@ -1,21 +1,11 @@
 import type { GameState } from '@shared/core/types';
-import { scorePairwise } from '@shared/game-logic/scoring';
+import { formatScore } from '../../utils/scoring-display.ts';
+import { PairwiseBreakdown } from '../PairwiseBreakdown.tsx';
 
 interface MobileRoundOverlayProps {
   gameState: GameState;
   currentUid: string;
   onClose?: () => void;
-}
-
-function formatScore(n: number): string {
-  return n >= 0 ? `+${n}` : `${n}`;
-}
-
-function pairwiseLabel(rowPoints: number, scoopBonus: number, total: number, aFouled: boolean, bFouled: boolean): string {
-  if (aFouled && bFouled) return `both fouled = ${formatScore(total)}`;
-  if (aFouled || bFouled) return `foul = ${formatScore(total)}`;
-  if (scoopBonus !== 0) return `rows ${formatScore(rowPoints)} scoop ${formatScore(scoopBonus)} = ${formatScore(total)}`;
-  return `rows ${formatScore(rowPoints)} = ${formatScore(total)}`;
 }
 
 export function MobileRoundOverlay({ gameState, currentUid, onClose }: MobileRoundOverlayProps) {
@@ -66,29 +56,9 @@ export function MobileRoundOverlay({ gameState, currentUid, onClose }: MobileRou
       </div>
 
       {/* Pairwise breakdown */}
-      {players.length >= 2 && (
-        <div className="w-full max-w-sm text-xs text-gray-500 border-t border-gray-800 pt-3 mb-6">
-          <div className="font-bold text-gray-400 mb-2">Pairwise</div>
-          {players.map((pA, i) =>
-            players.slice(i + 1).map((pB) => {
-              const aFouled = roundResults[pA.uid]?.fouled ?? false;
-              const bFouled = roundResults[pB.uid]?.fouled ?? false;
-              const result = scorePairwise(
-                pA.uid, aFouled, pA.board,
-                pB.uid, bFouled, pB.board,
-              );
-              return (
-                <div key={`${pA.uid}-${pB.uid}`} className="flex justify-between gap-2 mb-1">
-                  <span className="text-gray-400 truncate">{pA.displayName} vs {pB.displayName}</span>
-                  <span className="whitespace-nowrap">
-                    {pairwiseLabel(result.rowPoints, result.scoopBonus, result.total, aFouled, bFouled)}
-                  </span>
-                </div>
-              );
-            })
-          )}
-        </div>
-      )}
+      <div className="w-full max-w-sm mb-6">
+        <PairwiseBreakdown players={players} roundResults={roundResults} />
+      </div>
 
       {onClose ? (
         <button

@@ -1,15 +1,9 @@
-import type { Card, Row, GameState } from '@shared/core/types';
+import type { Card, GameState } from '@shared/core/types';
 import { GamePhase } from '@shared/core/types';
+import { INITIAL_DEAL_COUNT, STREET_PLACE_COUNT } from '@shared/core/constants';
 import { CardComponent, CARD_ASPECT } from '../CardComponent.tsx';
-
-interface Placement {
-  card: Card;
-  row: Row;
-}
-
-function cardKey(c: Card): string {
-  return `${c.rank}-${c.suit}`;
-}
+import { cardKey, boardCardCount } from '../../utils/card-utils.ts';
+import type { Placement } from '../../utils/card-utils.ts';
 
 interface MobileHandAreaProps {
   hand: Card[];
@@ -27,16 +21,14 @@ export function MobileHandArea({
   placements, submitting, cardWidthPx,
 }: MobileHandAreaProps) {
   const isInitialDeal = gameState.phase === GamePhase.InitialDeal;
-  const requiredPlacements = isInitialDeal ? 5 : 2;
+  const requiredPlacements = isInitialDeal ? INITIAL_DEAL_COUNT : STREET_PLACE_COUNT;
   const placedCardKeys = new Set(placements.map((p) => cardKey(p.card)));
   const remainingHand = hand.filter((c) => !placedCardKeys.has(cardKey(c)));
 
   const player = gameState.players[uid];
-  const alreadyPlaced = player
-    ? player.board.top.length + player.board.middle.length + player.board.bottom.length
-    : 0;
+  const alreadyPlaced = player ? boardCardCount(player.board) : 0;
   const waitingForOthers = isInitialDeal
-    ? alreadyPlaced >= 5 && hand.length === 0
+    ? alreadyPlaced >= INITIAL_DEAL_COUNT && hand.length === 0
     : alreadyPlaced > 0 && hand.length === 0;
 
   const handleCardClick = (index: number) => {
