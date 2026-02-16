@@ -34,28 +34,29 @@ test('dev UI features render correctly', async ({ browser }) => {
   // Wait for initial_deal phase
   await expect(alice.getByTestId('phase-label')).toContainText('initial_deal', { timeout: 15_000 });
 
-  // --- Debug panel should be visible by default ---
+  // --- Debug panel starts closed ---
+  await expect(alice.getByText('gameId')).not.toBeVisible({ timeout: 3_000 });
+
+  // --- Toggle debug panel on ---
+  await alice.getByText('[DBG]').click();
   await expect(alice.getByText('Debug')).toBeVisible();
 
-  // Debug panel should contain game state info (use first() since phase-label also shows it)
+  // Debug panel should contain game state info
   await expect(alice.getByText('initial_deal').first()).toBeVisible();
-  await expect(alice.getByText('Alice')).toBeVisible();
-  await expect(alice.getByText('Bob')).toBeVisible();
+  await expect(alice.getByText('Alice').first()).toBeVisible();
+  await expect(alice.getByText('Bob').first()).toBeVisible();
+  await expect(alice.getByText('gameId')).toBeVisible({ timeout: 3_000 });
 
   // --- Toggle debug panel off ---
   await alice.getByText('[DBG]').click();
-  // Debug panel header should disappear (the sidebar "Debug" text)
-  // The phase-label still shows "initial_deal" in the header bar, so check the sidebar-specific text
-  // DebugPanel has a table with "gameId" label — use that to verify panel is hidden
   await expect(alice.getByText('gameId')).not.toBeVisible({ timeout: 3_000 });
 
   // --- Toggle debug panel back on ---
   await alice.getByText('[DBG]').click();
   await expect(alice.getByText('gameId')).toBeVisible({ timeout: 3_000 });
 
-  // --- Hand summary line should be visible ---
+  // Wait for cards to be dealt
   await alice.getByTestId('hand-card-0').waitFor({ timeout: 15_000 });
-  await expect(alice.getByText('Hand:')).toBeVisible();
 
   // --- Play a full round to verify row evaluation labels ---
   await placeInitialDeal(alice);

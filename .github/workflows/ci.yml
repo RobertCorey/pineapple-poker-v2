@@ -37,3 +37,51 @@ jobs:
 
       - name: Unit tests
         run: npm run test:unit
+
+  e2e:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Build functions
+        run: npm run build -w functions
+
+      - name: Build dealer
+        run: npm run build -w dealer
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Start services
+        run: ./scripts/dev-up.sh --bg --no-functions
+
+      - name: Run E2E tests
+        run: npm test
+
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14
+
+      - name: Stop services
+        if: always()
+        run: ./scripts/dev-down.sh
