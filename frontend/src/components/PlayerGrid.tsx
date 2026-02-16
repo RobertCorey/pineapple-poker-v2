@@ -42,6 +42,7 @@ export function OpponentGrid({ gameState, currentUid }: OpponentGridProps) {
                 score={player.score}
                 hasPlaced={boardCount >= expectedCards}
                 disconnected={player.disconnected}
+                isBot={player.isBot}
               />
             );
           })}
