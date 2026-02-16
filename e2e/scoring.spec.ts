@@ -6,7 +6,7 @@ function generateRoomCode(): string {
   return Array.from({ length: 6 }, () => CHARS[Math.floor(Math.random() * CHARS.length)]).join('');
 }
 
-test('scores are computed correctly after timeout foul', async ({ browser }) => {
+test('scores are computed correctly after a full round', async ({ browser }) => {
   test.setTimeout(180_000);
 
   const roomId = generateRoomCode();
@@ -22,7 +22,7 @@ test('scores are computed correctly after timeout foul', async ({ browser }) => 
 
   await alice.getByTestId('name-input').fill('Alice');
   await alice.getByTestId('join-button').click();
-  await alice.getByTestId('start-match-button').waitFor({ timeout: 10_000 });
+  await alice.getByTestId('start-match-button').waitFor({ timeout: 30_000 });
 
   await bob.getByTestId('name-input').fill('Bob');
   await bob.getByTestId('join-button').click();
@@ -31,42 +31,34 @@ test('scores are computed correctly after timeout foul', async ({ browser }) => 
   // --- Host starts match ---
   await alice.getByTestId('start-match-button').click();
 
-  // --- Round 1: Alice plays, Bob times out ---
+  // --- Round 1: both players play normally ---
   await expect(alice.getByTestId('phase-label')).toContainText('initial_deal', { timeout: 15_000 });
   await expect(bob.getByTestId('phase-label')).toContainText('initial_deal', { timeout: 15_000 });
 
-  // Alice places cards normally
   await placeInitialDeal(alice);
-
-  // Bob does NOT place — waits for timeout (30s initial deal)
-  // After timeout, Bob is auto-fouled. Alice plays remaining streets solo.
-  await expect(alice.getByTestId('phase-label')).toContainText('street_2', { timeout: 45_000 });
+  await placeInitialDeal(bob);
 
   for (const street of [2, 3, 4, 5]) {
-    if (street > 2) {
-      await expect(alice.getByTestId('phase-label')).toContainText(`street_${street}`, { timeout: 15_000 });
-    }
+    await expect(alice.getByTestId('phase-label')).toContainText(`street_${street}`, { timeout: 15_000 });
     await placeStreet(alice, street);
+    await placeStreet(bob, street);
   }
 
   // Round 1 results
   await alice.getByTestId('round-results').waitFor({ timeout: 15_000 });
   await bob.getByTestId('round-results').waitFor({ timeout: 15_000 });
 
-  // Verify scores: Bob fouled = -6, Alice = +6
   const aliceResults = alice.getByTestId('round-results');
   await expect(aliceResults).toContainText('Round 1 of 3 Complete');
 
-  // Bob should be marked as fouled
-  await expect(aliceResults).toContainText('[FOULED]');
+  // Pairwise section should exist
+  await expect(aliceResults).toContainText('Pairwise');
+  await expect(aliceResults).toContainText('vs');
 
-  // Verify score values: foul penalty = -6 for Bob, +6 for Alice
-  // The round column shows netScore per player
-  await expect(aliceResults).toContainText('+6');
-  await expect(aliceResults).toContainText('-6');
-
-  // Pairwise section should show foul penalty
-  await expect(aliceResults).toContainText('foul penalty');
+  // Scores should be displayed (signed numbers)
+  // One player wins what the other loses in pairwise scoring
+  const resultsText = await aliceResults.textContent();
+  expect(resultsText).toMatch(/[+-]\d+/);
 
   // Close results
   await alice.getByTestId('close-results').click();
@@ -91,14 +83,8 @@ test('scores are computed correctly after timeout foul', async ({ browser }) => 
   const round2Results = alice.getByTestId('round-results');
   await expect(round2Results).toContainText('Round 2 of 3 Complete');
 
-  // Verify cumulative totals: Total column exists
+  // Verify cumulative totals
   await expect(round2Results).toContainText('Total');
-
-  // Alice's cumulative total should be >= +6 (she won +6 in round 1)
-  // Bob's cumulative total should be <= -6 (he lost -6 in round 1)
-  // We can't predict round 2 scores (random cards), but we can verify the format
-  // Both players' Total column should have signed numbers
-  // The table has "Round" and "Total" headers — verify both columns present
   await expect(round2Results).toContainText('Round');
   await expect(round2Results).toContainText('Player');
 

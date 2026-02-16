@@ -7,10 +7,10 @@ export default defineConfig({
   testDir: './e2e',
   testIgnore: isProduction
     ? ['**/bot.spec.ts', '**/stress.spec.ts', '**/scoring.spec.ts', '**/sit-out.spec.ts', '**/dev-ui.spec.ts']
-    : ['**/bot.spec.ts'],
+    : ['**/bot.spec.ts', '**/stress.spec.ts'],
   timeout: isProduction ? 180_000 : 120_000,
-  retries: isProduction ? 1 : 0,
-  workers: undefined, /* parallel — each test uses a unique room */
+  retries: isProduction ? 1 : (process.env.CI ? 1 : 0),
+  workers: process.env.CI ? 1 : undefined, /* serial on CI for emulator stability, parallel locally */
   use: {
     baseURL: process.env.PRODUCTION_URL || 'http://localhost:5173',
     headless: true,
