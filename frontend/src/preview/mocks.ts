@@ -136,8 +136,11 @@ export function generateMockGameState(opts: MockOptions): GameState {
     const playerDeck = shuffleWithRng(createDeck(), seededRng(100 + i));
 
     // Calculate how many cards should be on board
+    // Overlays require full boards for scoring/pairwise comparison
     let boardCardCount: number;
-    if (opts.cards === 'empty') {
+    if (opts.overlay !== 'none') {
+      boardCardCount = 13;
+    } else if (opts.cards === 'empty') {
       boardCardCount = 0;
     } else if (opts.cards === 'full') {
       boardCardCount = CARDS_ON_BOARD_AFTER_STREET[opts.street] ?? 0;

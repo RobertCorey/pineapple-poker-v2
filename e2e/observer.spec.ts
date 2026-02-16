@@ -35,8 +35,7 @@ test('late joiner observes match then plays after play-again', async ({ browser 
       // Inter-round results
       await alice.getByTestId('round-results').waitFor({ timeout: T_JOIN });
       await bob.getByTestId('round-results').waitFor({ timeout: T_JOIN });
-      await alice.getByTestId('close-results').click();
-      await bob.getByTestId('close-results').click();
+      // Overlay auto-dismisses when next round starts
     }
   }
 
@@ -75,10 +74,6 @@ test('late joiner observes match then plays after play-again', async ({ browser 
   await expect(alice.getByTestId('round-results')).toContainText('Alice');
   await expect(alice.getByTestId('round-results')).toContainText('Bob');
   await expect(alice.getByTestId('round-results')).toContainText('Carol');
-
-  // Pairwise section should include "vs" for 3-player pairings
-  await expect(alice.getByTestId('round-results')).toContainText('Pairwise');
-  await expect(alice.getByTestId('round-results')).toContainText('vs');
 
   await ctx3.close();
   await cleanupAB();

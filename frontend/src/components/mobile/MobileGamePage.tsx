@@ -115,8 +115,7 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
   const isStreet = STREET_PHASES.has(gameState.phase);
   const requiredPlacements = isInitialDeal ? INITIAL_DEAL_COUNT : STREET_PLACE_COUNT;
 
-  const [roundOverlayDismissed, setRoundOverlayDismissed] = useState(false);
-  const showRoundOverlay = isRoundComplete && !isMatchComplete && !roundOverlayDismissed;
+  const showRoundOverlay = isRoundComplete && !isMatchComplete;
 
   // Reset placement state when phase changes
   const [prevPhase, setPrevPhase] = useState(gameState.phase);
@@ -125,7 +124,6 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
     setPlacements([]);
     setSelectedIndex(null);
     setSubmitting(false);
-    setRoundOverlayDismissed(false);
   }
 
   const placedCardKeys = new Set(placements.map((p) => cardKey(p.card)));
@@ -283,7 +281,6 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
         <MobileRoundOverlay
           gameState={gameState}
           currentUid={uid}
-          onClose={() => setRoundOverlayDismissed(true)}
         />
       )}
 

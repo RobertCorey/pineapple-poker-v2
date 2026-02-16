@@ -165,11 +165,12 @@ async function playRoundWithGroup(players: Player[]): Promise<{
   return { active, observers };
 }
 
-/** Wait for round results to appear and close them */
+/** Wait for round results to appear and auto-dismiss */
 async function waitAndCloseResults(player: Player) {
   await player.page.getByTestId('round-results').waitFor({ timeout: 30_000 });
   await expect(player.page.getByTestId('round-results')).toContainText('Round Complete');
-  await player.page.getByTestId('close-results').click();
+  // Overlay auto-dismisses when next round starts
+  await player.page.getByTestId('round-results').waitFor({ state: 'hidden', timeout: 30_000 });
 }
 
 function log(msg: string) {
