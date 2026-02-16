@@ -74,6 +74,16 @@ jobs:
       - name: Start services
         run: ./scripts/dev-up.sh --bg --no-functions
 
+      - name: Dump service logs on failure
+        if: failure()
+        run: |
+          echo "=== Emulator log ==="
+          cat .logs/emulators.log 2>/dev/null || echo "(no emulator log)"
+          echo "=== Vite log ==="
+          cat .logs/vite.log 2>/dev/null || echo "(no vite log)"
+          echo "=== Dealer log ==="
+          cat .logs/dealer.log 2>/dev/null || echo "(no dealer log)"
+
       - name: Run E2E tests
         run: npm test
 
