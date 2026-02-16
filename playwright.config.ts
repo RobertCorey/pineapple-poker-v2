@@ -10,7 +10,7 @@ export default defineConfig({
     : ['**/bot.spec.ts', '**/stress.spec.ts'],
   timeout: isProduction ? 180_000 : 120_000,
   retries: isProduction ? 1 : (process.env.CI ? 1 : 0),
-  workers: process.env.CI ? 1 : undefined, /* serial on CI for emulator stability, parallel locally */
+  workers: undefined, /* parallel — tests use unique room codes so no shared state */
   use: {
     baseURL: process.env.PRODUCTION_URL || 'http://localhost:5173',
     headless: true,
