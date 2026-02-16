@@ -209,7 +209,7 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
   const playerCardW = computePlayerCardWidth(playerSize.w, playerSize.h);
 
   return (
-    <div className="h-[100dvh] bg-black flex justify-center">
+    <div className="h-full bg-black flex justify-center">
     <div className="w-full max-w-[430px] bg-gray-900 text-white font-mono flex flex-col overflow-hidden">
       {/* Compact mobile header */}
       <div className="border-b border-gray-700 px-2 py-1.5 flex items-center justify-between text-[10px] flex-shrink-0">
