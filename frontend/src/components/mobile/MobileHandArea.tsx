@@ -1,7 +1,11 @@
-import type { Card, GameState } from '@shared/core/types';
+import type { Card, Row, GameState } from '@shared/core/types';
 import { GamePhase } from '@shared/core/types';
-import { CardComponent } from '../CardComponent.tsx';
-import type { Placement } from '../GamePage.tsx';
+import { CardComponent, CARD_ASPECT } from '../CardComponent.tsx';
+
+interface Placement {
+  card: Card;
+  row: Row;
+}
 
 function cardKey(c: Card): string {
   return `${c.rank}-${c.suit}`;
@@ -15,11 +19,12 @@ interface MobileHandAreaProps {
   onSelectCard: (index: number | null) => void;
   placements: Placement[];
   submitting: boolean;
+  cardWidthPx: number;
 }
 
 export function MobileHandArea({
   hand, gameState, uid, selectedIndex, onSelectCard,
-  placements, submitting,
+  placements, submitting, cardWidthPx,
 }: MobileHandAreaProps) {
   const isInitialDeal = gameState.phase === GamePhase.InitialDeal;
   const requiredPlacements = isInitialDeal ? 5 : 2;
@@ -54,17 +59,22 @@ export function MobileHandArea({
     showCards = true;
   }
 
+  const cardH = Math.round(cardWidthPx * CARD_ASPECT);
+  const cardGap = Math.max(4, Math.round(cardWidthPx * 0.15));
+
   return (
-    <div className="bg-gray-900/90 border-t border-gray-700 px-2 py-2 flex-shrink-0">
-      {/* Card area - large touch targets */}
-      <div className="min-h-[4.5rem] flex items-center justify-center">
+    <div className="border-t border-gray-700 px-2 py-2 flex-shrink-0">
+      <div
+        className="flex items-center justify-center"
+        style={{ minHeight: cardH + 8 }}
+      >
         {showCards && !allPlaced ? (
-          <div className="flex justify-center gap-3">
+          <div className="flex justify-center" style={{ gap: cardGap }}>
             {remainingHand.map((card, i) => (
               <div key={cardKey(card)} data-testid={`mobile-hand-card-${i}`}>
                 <CardComponent
                   card={card}
-                  size="lg"
+                  widthPx={cardWidthPx}
                   selected={selectedIndex === i}
                   onClick={() => handleCardClick(i)}
                 />

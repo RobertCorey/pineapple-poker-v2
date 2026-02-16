@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import type { GameState, Card, Row, Board } from '@shared/core/types';
 import { GamePhase } from '@shared/core/types';
@@ -19,6 +19,83 @@ interface Placement {
   row: Row;
 }
 
+// --- Card size computation ---
+// Given a container's width and height, compute the largest card width
+// such that everything fits without scrolling.
+
+function computePlayerCardWidth(w: number, h: number): number {
+  if (w <= 0 || h <= 0) return 0;
+  // Width: board is 5 cards + 4 gaps(~6% each) + 2 padding(~12% each) + 2px border
+  // ≈ 5*cw + 0.24*cw + 0.24*cw + 10 ≈ 5.48*cw + 10
+  const fromWidth = (w - 10) / 5.48;
+  // Height: 3 board rows + 1 hand row = 4 rows of cards
+  // + board header(~20px) + row margins(~12px) + board padding(~0.24*cw) + border(2px)
+  // + hand padding(~20px) + instruction text(~16px) + gap between board & hand(~8px)
+  // ≈ 4 * cw * 1.4 + 0.24*cw + 78 ≈ 5.84*cw + 78
+  const fromHeight = (h - 78) / 5.84;
+  return Math.max(8, Math.floor(Math.min(fromWidth, fromHeight)));
+}
+
+/** Per-board width: 5 cards + 4 gaps(0.06*cw) + padding(0.24*cw) + row px-1(8) + border(4) + buffer
+ *  = 5.48*cw + 16 */
+const BOARD_W_COEFF = 5.48;
+const BOARD_W_FIXED = 16;
+/** Per-board height: 3 rows + header + padding + border + row margins
+ *  3*1.4*cw (cards) + 0.24*cw (padding) = 4.44*cw
+ *  header(~12) + border(4) + row margins(8) + row py(12) + buffer(6) = 42 */
+const BOARD_H_COEFF = 4.44;
+const BOARD_H_FIXED = 42;
+/** Gap between boards as fraction of cw */
+const BOARD_GAP_COEFF = 0.15;
+
+interface OpponentGridLayout {
+  cols: number;
+  rows: number;
+  cardWidth: number;
+}
+
+function computeOpponentGridLayout(w: number, h: number, n: number): OpponentGridLayout {
+  if (w <= 0 || h <= 0 || n <= 0) return { cols: 1, rows: 1, cardWidth: 0 };
+
+  let best: OpponentGridLayout = { cols: 1, rows: n, cardWidth: 0 };
+
+  // Try every possible column count and pick the one that maximizes card size
+  for (let cols = 1; cols <= n; cols++) {
+    const rows = Math.ceil(n / cols);
+    // Width constraint: cols boards + (cols-1) gaps
+    // cols * (BOARD_W_COEFF*cw + BOARD_W_FIXED) + (cols-1) * BOARD_GAP_COEFF*cw ≤ w
+    // cw * (cols*BOARD_W_COEFF + (cols-1)*BOARD_GAP_COEFF) + cols*BOARD_W_FIXED ≤ w
+    const wCoeff = cols * BOARD_W_COEFF + (cols - 1) * BOARD_GAP_COEFF;
+    const fromWidth = (w - cols * BOARD_W_FIXED) / wCoeff;
+    // Height constraint: rows boards + (rows-1) gaps
+    const hCoeff = rows * BOARD_H_COEFF + (rows - 1) * BOARD_GAP_COEFF;
+    const fromHeight = (h - rows * BOARD_H_FIXED) / hCoeff;
+    const cw = Math.floor(Math.min(fromWidth, fromHeight));
+    if (cw > best.cardWidth) {
+      best = { cols, rows, cardWidth: cw };
+    }
+  }
+
+  best.cardWidth = Math.max(4, best.cardWidth);
+  return best;
+}
+
+function useContainerSize(ref: React.RefObject<HTMLDivElement | null>) {
+  const [size, setSize] = useState({ w: 0, h: 0 });
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const update = () => setSize({ w: el.clientWidth, h: el.clientHeight });
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [ref]);
+  return size;
+}
+
+// --- Component ---
+
 interface MobileGamePageProps {
   gameState: GameState;
   hand: Card[];
@@ -33,6 +110,12 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
   const [submitting, setSubmitting] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+
+  // Section refs for measuring
+  const opponentRef = useRef<HTMLDivElement>(null);
+  const playerRef = useRef<HTMLDivElement>(null);
+  const opponentSize = useContainerSize(opponentRef);
+  const playerSize = useContainerSize(playerRef);
 
   // Auto-dismiss toast
   useEffect(() => {
@@ -59,8 +142,6 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
     gameState.phase !== GamePhase.MatchComplete;
   const requiredPlacements = isInitialDeal ? 5 : 2;
 
-  // Show round results as full-screen takeover — auto-shows when round completes,
-  // auto-hides when phase changes away from Complete (no dismiss button)
   const showRoundOverlay = isRoundComplete && !isMatchComplete;
 
   // Reset placement state when phase changes
@@ -150,8 +231,14 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
   const currentPlayer = gameState.players[uid];
   const expectedCards = gameState.street === 1 ? 5 : 3 + 2 * gameState.street;
 
+  // Compute card sizes from measured sections
+  const numOpponents = gameState.playerOrder.filter((id) => id !== uid).length;
+  const opponentLayout = computeOpponentGridLayout(opponentSize.w, opponentSize.h, numOpponents);
+  const playerCardW = computePlayerCardWidth(playerSize.w, playerSize.h);
+
   return (
-    <div className="h-[100dvh] bg-gray-900 text-white font-mono flex flex-col overflow-hidden">
+    <div className="h-[100dvh] bg-black flex justify-center">
+    <div className="w-full max-w-[430px] bg-gray-900 text-white font-mono flex flex-col overflow-hidden">
       {/* Compact mobile header */}
       <div className="border-b border-gray-700 px-2 py-1.5 flex items-center justify-between text-[10px] flex-shrink-0">
         <div className="flex items-center gap-2">
@@ -183,46 +270,50 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
         </div>
       )}
 
-      {/* Main content: opponents top, player board middle, hand bottom */}
+      {/* Main content: 50/50 split */}
       <div className="flex-1 flex flex-col min-h-0">
-        {/* Top section: opponent grid */}
-        <div className="flex-shrink-0 border-b border-gray-800" style={{ maxHeight: '35%' }}>
-          <MobileOpponentGrid gameState={gameState} currentUid={uid} />
+        {/* Top half: opponents */}
+        <div ref={opponentRef} className="h-1/2 border-b border-gray-800">
+          <MobileOpponentGrid gameState={gameState} currentUid={uid} cardWidthPx={opponentLayout.cardWidth} cols={opponentLayout.cols} />
         </div>
 
-        {/* Middle section: player's board */}
-        <div className="flex-1 min-h-0 overflow-auto flex items-center justify-center p-2">
-          {currentPlayer && (
-            <PlayerBoard
-              board={mergedBoard}
-              playerName={`${currentPlayer.displayName} (You)`}
-              fouled={currentPlayer.fouled}
-              isCurrentPlayer
-              onRowClick={selectedIndex !== null && !submitting ? handleRowClick : undefined}
-              hasCardSelected={selectedIndex !== null && !submitting}
-              cardSize="sm"
-              score={currentPlayer.score}
-              hasPlaced={(() => {
-                const b = mergedBoard;
-                return b.top.length + b.middle.length + b.bottom.length >= expectedCards;
-              })()}
-            />
-          )}
-        </div>
+        {/* Bottom half: player board + hand */}
+        <div ref={playerRef} className="h-1/2 flex flex-col">
+          {/* Player board — centered in remaining space */}
+          <div className="flex-1 min-h-0 flex items-center justify-center">
+            {currentPlayer && playerCardW > 0 && (
+              <PlayerBoard
+                board={mergedBoard}
+                playerName={`${currentPlayer.displayName} (You)`}
+                fouled={currentPlayer.fouled}
+                isCurrentPlayer
+                onRowClick={selectedIndex !== null && !submitting ? handleRowClick : undefined}
+                hasCardSelected={selectedIndex !== null && !submitting}
+                cardWidthPx={playerCardW}
+                score={currentPlayer.score}
+                hasPlaced={(() => {
+                  const b = mergedBoard;
+                  return b.top.length + b.middle.length + b.bottom.length >= expectedCards;
+                })()}
+              />
+            )}
+          </div>
 
-        {/* Bottom section: hand area */}
-        <MobileHandArea
-          hand={hand}
-          gameState={gameState}
-          uid={uid}
-          selectedIndex={selectedIndex}
-          onSelectCard={setSelectedIndex}
-          placements={placements}
-          submitting={submitting}
-        />
+          {/* Hand area */}
+          <MobileHandArea
+            hand={hand}
+            gameState={gameState}
+            uid={uid}
+            selectedIndex={selectedIndex}
+            onSelectCard={setSelectedIndex}
+            placements={placements}
+            submitting={submitting}
+            cardWidthPx={playerCardW}
+          />
+        </div>
       </div>
 
-      {/* Full-screen round results overlay (auto-dismiss, no close button) */}
+      {/* Full-screen round results overlay */}
       {showRoundOverlay && (
         <MobileRoundOverlay
           gameState={gameState}
@@ -245,6 +336,7 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
           {toast}
         </div>
       )}
+    </div>
     </div>
   );
 }

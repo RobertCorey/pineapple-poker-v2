@@ -1,4 +1,5 @@
 import type { Card } from '@shared/core/types';
+import type { CSSProperties } from 'react';
 import { RANK_NAMES } from '@shared/core/constants';
 
 const SUIT_SYMBOLS: Record<string, string> = {
@@ -46,20 +47,38 @@ const RANK_SIZE: Record<CardSize, string> = {
   lg: 'text-lg leading-none',
 };
 
+export const CARD_ASPECT = 1.4;
+
 interface CardProps {
   card: Card | null;
   faceDown?: boolean;
   selected?: boolean;
   onClick?: () => void;
-  /** @deprecated use `size` instead */
-  small?: boolean;
   size?: CardSize;
+  /** Pixel width — when set, card dimensions are computed from this instead of size presets. */
+  widthPx?: number;
 }
 
-export function CardComponent({ card, faceDown, selected, onClick, small, size }: CardProps) {
-  const resolvedSize: CardSize = size ?? (small ? 'md' : 'lg');
-  const sizeClass = SIZE_CLASSES[resolvedSize];
-  const rankSize = RANK_SIZE[resolvedSize];
+function pxStyles(w: number) {
+  return {
+    card: {
+      width: w,
+      height: Math.round(w * CARD_ASPECT),
+      borderRadius: Math.max(2, Math.round(w * 0.1)),
+    } as CSSProperties,
+    rank: {
+      fontSize: Math.max(7, Math.round(w * 0.3)),
+      lineHeight: '1',
+    } as CSSProperties,
+  };
+}
+
+export function CardComponent({ card, faceDown, selected, onClick, size, widthPx }: CardProps) {
+  const px = widthPx !== undefined;
+  const resolvedSize: CardSize = size ?? 'lg';
+  const ps = px ? pxStyles(widthPx!) : null;
+  const sizeClass = px ? '' : SIZE_CLASSES[resolvedSize];
+  const rankClass = px ? '' : RANK_SIZE[resolvedSize];
 
   if (!card || faceDown) {
     return (
@@ -70,6 +89,7 @@ export function CardComponent({ card, faceDown, selected, onClick, small, size }
           flex items-center justify-center cursor-default
           bg-[repeating-linear-gradient(45deg,transparent,transparent_4px,rgba(255,255,255,0.05)_4px,rgba(255,255,255,0.05)_8px)]
         `}
+        style={ps?.card}
       >
         {!card && <span className="text-gray-500">-</span>}
       </div>
@@ -92,9 +112,10 @@ export function CardComponent({ card, faceDown, selected, onClick, small, size }
         ${selected ? `border-yellow-400 ring-2 ${ring} -translate-y-2 shadow-lg shadow-yellow-900/30` : ''}
         ${onClick ? 'cursor-pointer hover:brightness-125 hover:-translate-y-1' : 'cursor-default'}
       `}
+      style={ps?.card}
     >
-      <span className={rankSize}>{rank}</span>
-      <span className={rankSize}>{symbol}</span>
+      <span className={rankClass} style={ps?.rank}>{rank}</span>
+      <span className={rankClass} style={ps?.rank}>{symbol}</span>
     </div>
   );
 }
