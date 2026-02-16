@@ -6,7 +6,7 @@ export default defineConfig({
   globalSetup: './e2e/global-setup.ts',
   testDir: './e2e',
   testIgnore: isProduction
-    ? ['**/bot.spec.ts', '**/stress.spec.ts', '**/scoring.spec.ts', '**/sit-out.spec.ts', '**/dev-ui.spec.ts']
+    ? ['**/bot.spec.ts', '**/stress.spec.ts', '**/scoring.spec.ts', '**/sit-out.spec.ts']
     : ['**/bot.spec.ts', '**/stress.spec.ts'],
   timeout: isProduction ? 180_000 : 120_000,
   retries: isProduction ? 1 : (process.env.CI ? 1 : 0),

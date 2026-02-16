@@ -71,7 +71,7 @@ export function MobileHandArea({
         {showCards && !allPlaced ? (
           <div className="flex justify-center" style={{ gap: cardGap }}>
             {remainingHand.map((card, i) => (
-              <div key={cardKey(card)} data-testid={`mobile-hand-card-${i}`}>
+              <div key={cardKey(card)} data-testid={`hand-card-${i}`}>
                 <CardComponent
                   card={card}
                   widthPx={cardWidthPx}

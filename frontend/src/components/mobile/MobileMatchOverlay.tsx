@@ -48,7 +48,7 @@ export function MobileMatchOverlay({ gameState, currentUid, roomId }: MobileMatc
   };
 
   return (
-    <div data-testid="mobile-match-overlay" className="fixed inset-0 bg-gray-900 z-50 flex flex-col items-center justify-center px-6 font-mono overflow-y-auto">
+    <div data-testid="match-results" className="fixed inset-0 bg-gray-900 z-50 flex flex-col items-center justify-center px-6 font-mono overflow-y-auto">
       <div className="py-8 w-full max-w-sm">
         <h2 className="text-xl font-bold text-white mb-6 text-center">Match Complete</h2>
 

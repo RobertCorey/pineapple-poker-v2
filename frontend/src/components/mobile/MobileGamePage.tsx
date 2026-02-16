@@ -142,7 +142,8 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
     gameState.phase !== GamePhase.MatchComplete;
   const requiredPlacements = isInitialDeal ? 5 : 2;
 
-  const showRoundOverlay = isRoundComplete && !isMatchComplete;
+  const [roundOverlayDismissed, setRoundOverlayDismissed] = useState(false);
+  const showRoundOverlay = isRoundComplete && !isMatchComplete && !roundOverlayDismissed;
 
   // Reset placement state when phase changes
   const [prevPhase, setPrevPhase] = useState(gameState.phase);
@@ -151,6 +152,7 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
     setPlacements([]);
     setSelectedIndex(null);
     setSubmitting(false);
+    setRoundOverlayDismissed(false);
   }
 
   const placedCardKeys = new Set(placements.map((p) => cardKey(p.card)));
@@ -250,8 +252,8 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
           )}
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-gray-500">
-            R{gameState.round}/{gameState.totalRounds} S{gameState.street}
+          <span className="text-gray-500" data-testid="phase-label">
+            R{gameState.round}/{gameState.totalRounds} S{gameState.street} {gameState.phase}
           </span>
           <button
             onClick={handleLeave}
@@ -280,7 +282,7 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
         {/* Bottom half: player board + hand */}
         <div ref={playerRef} className="h-1/2 flex flex-col">
           {/* Player board — centered in remaining space */}
-          <div className="flex-1 min-h-0 flex items-center justify-center">
+          <div className="flex-1 min-h-0 flex items-center justify-center" data-testid="my-board">
             {currentPlayer && playerCardW > 0 && (
               <PlayerBoard
                 board={mergedBoard}
@@ -318,6 +320,7 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
         <MobileRoundOverlay
           gameState={gameState}
           currentUid={uid}
+          onClose={() => setRoundOverlayDismissed(true)}
         />
       )}
 
