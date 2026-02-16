@@ -2,13 +2,6 @@ import type { Card } from '@shared/core/types';
 import type { CSSProperties } from 'react';
 import { RANK_NAMES } from '@shared/core/constants';
 
-const SUIT_SYMBOLS: Record<string, string> = {
-  h: '\u2665',
-  d: '\u2666',
-  c: '\u2663',
-  s: '\u2660',
-};
-
 /** Four-color deck: each suit gets a distinct background color. */
 const SUIT_BG: Record<string, string> = {
   s: 'bg-gray-900',   // spades — black
@@ -41,10 +34,10 @@ const SIZE_CLASSES: Record<CardSize, string> = {
 };
 
 const RANK_SIZE: Record<CardSize, string> = {
-  xs: 'text-[8px] leading-none',
-  sm: 'text-xs leading-none',
-  md: 'text-sm leading-none',
-  lg: 'text-lg leading-none',
+  xs: 'text-[10px] leading-none',
+  sm: 'text-sm leading-none',
+  md: 'text-base leading-none',
+  lg: 'text-xl leading-none',
 };
 
 export const CARD_ASPECT = 1.4;
@@ -67,7 +60,7 @@ function pxStyles(w: number) {
       borderRadius: Math.max(2, Math.round(w * 0.1)),
     } as CSSProperties,
     rank: {
-      fontSize: Math.max(7, Math.round(w * 0.3)),
+      fontSize: Math.max(7, Math.round(w * 0.45)),
       lineHeight: '1',
     } as CSSProperties,
   };
@@ -96,7 +89,6 @@ export function CardComponent({ card, faceDown, selected, onClick, size, widthPx
     );
   }
 
-  const symbol = SUIT_SYMBOLS[card.suit];
   const rank = RANK_NAMES[card.rank];
   const bg = SUIT_BG[card.suit];
   const border = SUIT_BORDER[card.suit];
@@ -115,7 +107,6 @@ export function CardComponent({ card, faceDown, selected, onClick, size, widthPx
       style={ps?.card}
     >
       <span className={rankClass} style={ps?.rank}>{rank}</span>
-      <span className={rankClass} style={ps?.rank}>{symbol}</span>
     </div>
   );
 }
