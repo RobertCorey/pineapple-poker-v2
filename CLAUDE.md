@@ -203,6 +203,112 @@ Emulator connections activate only when `import.meta.env.DEV` is true (in `front
 
 Firestore transactions require ALL reads before ANY writes. The functions in `dealer/src/game-engine.ts` (`advanceStreet`, `scoreRound`) collect all subcollection reads into a Map first, then perform all writes. Interleaving reads and writes will cause runtime errors.
 
+## Development Workflow
+
+### 1. Write code locally
+
+Create a feature branch off `main`:
+
+```bash
+git checkout main && git pull
+git checkout -b feature/my-feature
+```
+
+Start the dev environment (pick one):
+
+```bash
+npm run dev:up              # tmux: 4 panes (emulators, vite, dealer, functions:watch)
+npm run dev:up -- --bg      # background mode (logs in .logs/, stop with npm run dev:down)
+```
+
+Or manually in 3 terminals:
+
+```bash
+firebase emulators:start    # Terminal 1
+npm run dev                 # Terminal 2
+npm run dealer              # Terminal 3
+```
+
+If editing Cloud Functions, also run `npm run functions:watch` in a 4th terminal.
+
+### 2. Test locally
+
+Run the full test suite before pushing:
+
+```bash
+npm run test:unit           # Unit tests (no emulators needed)
+npm test                    # E2E tests (requires dev environment running)
+```
+
+E2E tests use unique room codes per test — no need to clear emulator state between runs.
+
+### 3. Open a PR
+
+Push your branch and open a PR against `main`:
+
+```bash
+git push -u origin feature/my-feature
+gh pr create
+```
+
+CI runs two jobs in sequence:
+1. **check** — lint, build all 3 workspaces, unit tests
+2. **e2e** — starts Firebase emulators + Vite + dealer, runs full Playwright suite
+
+Both jobs must pass before the PR can merge. Branch protection enforces this.
+
+### 4. Merge to main
+
+Squash-merge the PR (default). This triggers the **Deploy** workflow automatically.
+
+### 5. Automatic deployment
+
+The deploy workflow (`deploy.yml`) runs on every push to `main`:
+
+1. **Change detection** — checks which files changed in the merge commit
+2. **deploy-firebase** (conditional) — builds and deploys frontend + Cloud Functions to Firebase Hosting if `frontend/`, `functions/`, `shared/`, `firestore.rules`, or `firebase.json` changed
+3. **deploy-dealer** (conditional) — builds and deploys dealer to GCE VM via rsync + systemd restart if `dealer/` or `shared/` changed
+4. **smoke-test** — runs a subset of E2E tests against the live production URL
+
+### 6. Verify production
+
+The smoke test runs automatically after deploy. You can also check manually:
+
+```bash
+# Dealer health
+gcloud compute ssh pineapple-dealer --zone us-central1-a --command "curl -sf http://localhost:8080/health"
+
+# Dealer logs
+gcloud compute ssh pineapple-dealer --zone us-central1-a --command "sudo journalctl -u pineapple-dealer -n 50 --no-pager"
+
+# Run E2E against production
+PRODUCTION_URL=https://pineapple-poker-8f3.web.app npx playwright test
+```
+
+### Rollback
+
+If production breaks after deploy:
+
+- **Firebase (frontend + functions)**: Revert the commit on `main` and push — deploy will redeploy the previous state. Or use `firebase hosting:rollback` for immediate hosting rollback.
+- **Dealer**: SSH to VM and restart with previous build, or revert commit and let deploy re-run.
+- **Emergency**: `firebase hosting:rollback` is instant and doesn't require CI.
+
+### CI/CD architecture
+
+```
+PR opened/updated
+  └─ ci.yml
+       ├─ check (lint, build, unit tests)
+       └─ e2e (emulators + Playwright) ← both required to merge
+
+Merge to main
+  └─ deploy.yml
+       ├─ change detection
+       ├─ deploy-firebase (if frontend/functions/shared changed)
+       ├─ deploy-dealer (if dealer/shared changed)
+       └─ smoke-test (E2E subset against production)
+```
+
 ## Game rules reference
 
 - **Board**: 3 rows — top (3 cards), middle (5 cards), bottom (5 cards)
