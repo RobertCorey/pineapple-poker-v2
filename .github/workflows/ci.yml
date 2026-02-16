@@ -88,7 +88,7 @@ jobs:
           cat .logs/dealer.log 2>/dev/null || echo "(no dealer log)"
 
       - name: Run E2E tests
-        run: npm test
+        run: npx playwright test --reporter=list
 
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
