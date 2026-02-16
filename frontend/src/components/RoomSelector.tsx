@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { httpsCallable } from 'firebase/functions';
-import { functions } from '../firebase.ts';
+import { functions, trackEvent } from '../firebase.ts';
 import { generateRoomCode } from '../utils/roomCode.ts';
 
 interface RoomSelectorProps {
@@ -32,6 +32,7 @@ export function RoomSelector({ displayName, setDisplayName, signIn, onRoomJoined
       const roomId = generateRoomCode();
       const joinGame = httpsCallable(functions, 'joinGame');
       await joinGame({ roomId, displayName: nameInput.trim(), create: true });
+      trackEvent('create_room', { roomId });
       onRoomJoined(roomId);
     } catch (err) {
       console.error('Failed to create room:', err);
@@ -50,6 +51,7 @@ export function RoomSelector({ displayName, setDisplayName, signIn, onRoomJoined
       const roomId = roomCodeInput.trim().toUpperCase();
       const joinGame = httpsCallable(functions, 'joinGame');
       await joinGame({ roomId, displayName: nameInput.trim() });
+      trackEvent('join_room', { roomId });
       onRoomJoined(roomId);
     } catch (err) {
       console.error('Failed to join room:', err);
