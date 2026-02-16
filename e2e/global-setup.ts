@@ -50,20 +50,43 @@ export default async function globalSetup() {
     throw new Error(msg);
   }
 
-  // Warm up Cloud Functions emulator to avoid cold-start timeouts in tests.
-  // The first function invocation can take 3-10s on CI while the emulator JIT-loads.
+  // Warm up the full emulator stack: Auth → Cloud Functions → Firestore.
+  // Each service has a cold-start penalty on CI (3-15s). Running a real
+  // joinGame + leaveGame round-trip here ensures every layer is hot before
+  // the first test starts. This is much cheaper than retrying a failed test.
   if (!productionUrl) {
-    const fns = ['joinGame', 'placeCards', 'startMatch', 'leaveGame', 'playAgain'];
-    await Promise.allSettled(
-      fns.map((fn) =>
-        fetch(`http://localhost:5001/pineapple-poker-8f3/us-central1/${fn}`, {
+    const AUTH_URL =
+      'http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signUp?key=fake-api-key';
+    const FN_BASE = 'http://127.0.0.1:5001/pineapple-poker-8f3/us-central1';
+    const WARMUP_ROOM = 'WARMUP';
+
+    try {
+      // 1. Anonymous auth — warms the Auth emulator
+      const authRes = await fetch(AUTH_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ returnSecureToken: true }),
+      });
+      const { idToken } = (await authRes.json()) as { idToken: string };
+
+      const callFn = (fn: string, data: Record<string, unknown>) =>
+        fetch(`${FN_BASE}/${fn}`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ data: {} }),
-        }).catch(() => {}),
-      ),
-    );
-    // Give the emulator time to finish loading all function definitions.
-    await new Promise((r) => setTimeout(r, 3_000));
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({ data }),
+        });
+
+      // 2. joinGame — warms Functions emulator + Firestore writes
+      await callFn('joinGame', { roomId: WARMUP_ROOM, displayName: 'Warmup', create: true });
+
+      // 3. leaveGame — warms a second function + cleans up the room
+      await callFn('leaveGame', { roomId: WARMUP_ROOM });
+    } catch {
+      // Non-fatal — tests will still run, just might be slower on first call.
+      console.warn('Emulator warmup failed (non-fatal)');
+    }
   }
 }
