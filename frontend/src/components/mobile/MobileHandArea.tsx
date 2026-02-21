@@ -80,19 +80,21 @@ export function MobileHandArea({
         )}
       </div>
 
-      {/* Instruction line */}
-      {showCards && !allPlaced && (
-        <div className="text-[10px] text-gray-500 text-center mt-1">
-          {selectedIndex !== null
-            ? 'Tap a row to place'
-            : 'Tap a card to select'}
-          {placements.length > 0 && (
-            <span className="ml-1 text-gray-600">
-              ({placements.length}/{requiredPlacements})
-            </span>
-          )}
-        </div>
-      )}
+      {/* Instruction line — always rendered to prevent layout shift */}
+      <div className="text-[10px] text-gray-500 text-center mt-1">
+        {showCards && !allPlaced ? (
+          <>
+            {selectedIndex !== null ? 'Tap a row to place' : 'Tap a card to select'}
+            {placements.length > 0 && (
+              <span className="ml-1 text-gray-600">
+                ({placements.length}/{requiredPlacements})
+              </span>
+            )}
+          </>
+        ) : (
+          '\u00a0'
+        )}
+      </div>
     </div>
   );
 }
