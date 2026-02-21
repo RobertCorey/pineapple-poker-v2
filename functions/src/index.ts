@@ -4,4 +4,4 @@ admin.initializeApp();
 
 export { joinGame, leaveGame, placeCards, startMatch, playAgain, addBot, removeBot } from './player-actions';
 export { pruneOldGames } from './cleanup';
-export { adminDeleteRoom, adminKickPlayer } from './admin-actions';
+export { adminDeleteRoom, adminKickPlayer, adminKillAllGames } from './admin-actions';

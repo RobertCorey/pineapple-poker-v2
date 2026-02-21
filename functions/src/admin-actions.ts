@@ -59,6 +59,33 @@ export const adminDeleteRoom = onCall({ maxInstances: 10 }, async (request) => {
   return { success: true };
 });
 
+export const adminKillAllGames = onCall({ maxInstances: 10 }, async (request) => {
+  requireAdmin(request);
+
+  const allGames = await db().collection('games').get();
+  if (allGames.empty) return { deleted: 0 };
+
+  const writer = db().bulkWriter();
+  let count = 0;
+
+  for (const gameSnap of allGames.docs) {
+    const roomId = gameSnap.id;
+
+    const [hands, decks] = await Promise.all([
+      db().collection(`games/${roomId}/hands`).listDocuments(),
+      db().collection(`games/${roomId}/decks`).listDocuments(),
+    ]);
+
+    for (const doc of hands) writer.delete(doc);
+    for (const doc of decks) writer.delete(doc);
+    writer.delete(gameSnap.ref);
+    count++;
+  }
+
+  await writer.close();
+  return { deleted: count };
+});
+
 export const adminKickPlayer = onCall({ maxInstances: 10 }, async (request) => {
   requireAdmin(request);
 

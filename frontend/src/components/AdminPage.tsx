@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { auth } from '../firebase';
 import { GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, type User } from 'firebase/auth';
 import { useAllGames, type GameStateWithRoom } from '../hooks/useAllGames';
-import { adminDeleteRoom, adminKickPlayer } from '../api';
+import { adminDeleteRoom, adminKickPlayer, adminKillAllGames } from '../api';
 
 const ADMIN_EMAIL = 'robertbcorey@gmail.com';
 
@@ -96,13 +96,51 @@ function RoomRow({ game }: { game: GameStateWithRoom }) {
   );
 }
 
-function Dashboard() {
-  const { games, loading } = useAllGames();
+function KillAllGames({ gameCount }: { gameCount: number }) {
+  const [input, setInput] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
 
-  if (loading) {
-    return <p className="text-gray-400">Loading rooms...</p>;
-  }
+  const handleKill = async () => {
+    setBusy(true);
+    setResult(null);
+    try {
+      const res = await adminKillAllGames();
+      const data = res.data as { deleted: number };
+      setResult(`Deleted ${data.deleted} game${data.deleted === 1 ? '' : 's'}.`);
+      setInput('');
+    } catch (err) {
+      setResult(`Error: ${err instanceof Error ? err.message : err}`);
+    } finally {
+      setBusy(false);
+    }
+  };
 
+  return (
+    <div className="mb-6 border border-red-900 p-4 rounded">
+      <div className="flex items-center gap-3">
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && input === 'kill all' && gameCount > 0 && handleKill()}
+          placeholder='Type "kill all" to delete all games'
+          className="px-3 py-2 bg-gray-900 border border-gray-700 text-white placeholder-gray-600 focus:outline-none focus:border-red-500 text-sm w-72"
+        />
+        <button
+          onClick={handleKill}
+          disabled={input !== 'kill all' || busy || gameCount === 0}
+          className="px-4 py-2 bg-red-700 hover:bg-red-600 disabled:bg-gray-800 disabled:text-gray-600 text-white text-sm font-bold"
+        >
+          {busy ? 'Deleting...' : `Kill All (${gameCount})`}
+        </button>
+        {result && <span className="text-sm text-gray-400">{result}</span>}
+      </div>
+    </div>
+  );
+}
+
+function Dashboard({ games }: { games: GameStateWithRoom[] }) {
   if (games.length === 0) {
     return <p className="text-gray-400">No active rooms.</p>;
   }
@@ -126,6 +164,21 @@ function Dashboard() {
         ))}
       </tbody>
     </table>
+  );
+}
+
+function DashboardWithKillAll() {
+  const { games, loading } = useAllGames();
+
+  if (loading) {
+    return <p className="text-gray-400">Loading rooms...</p>;
+  }
+
+  return (
+    <>
+      <KillAllGames gameCount={games.length} />
+      <Dashboard games={games} />
+    </>
   );
 }
 
@@ -194,7 +247,7 @@ export default function AdminPage() {
           </button>
         </div>
       </div>
-      <Dashboard />
+      <DashboardWithKillAll />
     </div>
   );
 }
