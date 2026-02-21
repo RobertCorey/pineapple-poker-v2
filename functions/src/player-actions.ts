@@ -76,7 +76,7 @@ function newPlayerState(uid: string, displayName: string): PlayerState {
 
 // ---- removePlayer (inlined from former game-manager.ts) ----
 
-async function removePlayer(uid: string, roomId: string): Promise<void> {
+export async function removePlayer(uid: string, roomId: string): Promise<void> {
   const gameRef = db().doc(gameDoc(roomId));
 
   await db().runTransaction(async (tx) => {
