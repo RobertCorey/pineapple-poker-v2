@@ -10,3 +10,4 @@ export const addBot = httpsCallable(functions, 'addBot');
 export const removeBot = httpsCallable(functions, 'removeBot');
 export const adminDeleteRoom = httpsCallable(functions, 'adminDeleteRoom');
 export const adminKickPlayer = httpsCallable(functions, 'adminKickPlayer');
+export const adminKillAllGames = httpsCallable(functions, 'adminKillAllGames');
