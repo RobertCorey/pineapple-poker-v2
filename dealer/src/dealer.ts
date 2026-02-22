@@ -8,7 +8,7 @@ import {
   resetForNextRound,
   handlePhaseTimeout,
   checkAndAdvance,
-  placeBotCards,
+  placeSingleBotCards,
 } from './game-engine';
 
 function isPlacementPhase(phase: string): boolean {
@@ -21,13 +21,14 @@ function isPlacementPhase(phase: string): boolean {
   );
 }
 
-/** Delay before bot places cards (ms) — feels more natural than instant. */
-const BOT_PLACE_DELAY_MS = 1_500;
+/** Min/max delay before a bot places cards (ms) — staggered for realism. */
+const BOT_PLACE_MIN_MS = 1_000;
+const BOT_PLACE_MAX_MS = 5_000;
 
 interface RoomState {
   timer: ReturnType<typeof setTimeout> | null;
   currentDeadline: number | null;
-  botTimer: ReturnType<typeof setTimeout> | null;
+  botTimers: Map<string, ReturnType<typeof setTimeout>>;
 }
 
 export class Dealer {
@@ -72,7 +73,7 @@ export class Dealer {
   private removeRoom(roomId: string): void {
     const room = this.rooms.get(roomId);
     if (room?.timer) clearTimeout(room.timer);
-    if (room?.botTimer) clearTimeout(room.botTimer);
+    for (const t of room?.botTimers.values() ?? []) clearTimeout(t);
     this.rooms.delete(roomId);
     console.log(`[Dealer] Room ${roomId} removed`);
   }
@@ -80,7 +81,7 @@ export class Dealer {
   private getOrCreateRoom(roomId: string): RoomState {
     let room = this.rooms.get(roomId);
     if (!room) {
-      room = { timer: null, currentDeadline: null, botTimer: null };
+      room = { timer: null, currentDeadline: null, botTimers: new Map() };
       this.rooms.set(roomId, room);
     }
     return room;
@@ -159,7 +160,7 @@ export class Dealer {
       });
 
       if (botsNeedToPlace) {
-        this.scheduleBotPlacement(roomId);
+        this.scheduleBotPlacements(roomId, game);
       }
 
       const allPlaced = game.playerOrder.every((uid) => {
@@ -182,24 +183,31 @@ export class Dealer {
     // GP.Complete: timer handles inter-round delay
   }
 
-  private scheduleBotPlacement(roomId: string): void {
+  private scheduleBotPlacements(roomId: string, game: GameState): void {
     const room = this.getOrCreateRoom(roomId);
 
-    // Don't schedule if already pending
-    if (room.botTimer) return;
+    for (const uid of game.playerOrder) {
+      const p = game.players[uid];
+      if (!p?.isBot || p.fouled || p.currentHand.length === 0) continue;
 
-    console.log(`[Dealer] [${roomId}] Scheduling bot placement in ${BOT_PLACE_DELAY_MS}ms`);
-    room.botTimer = setTimeout(() => {
-      room.botTimer = null;
-      (async () => {
-        const placed = await placeBotCards(this.db, roomId);
-        if (placed) {
-          await checkAndAdvance(this.db, roomId);
-        }
-      })().catch((err) => {
-        console.error(`[Dealer] [${roomId}] Bot placement error:`, err);
-      });
-    }, BOT_PLACE_DELAY_MS);
+      // Don't schedule if this bot already has a pending timer
+      if (room.botTimers.has(uid)) continue;
+
+      const delay = BOT_PLACE_MIN_MS + Math.random() * (BOT_PLACE_MAX_MS - BOT_PLACE_MIN_MS);
+      console.log(`[Dealer] [${roomId}] Scheduling ${p.displayName} placement in ${Math.round(delay / 1000)}s`);
+
+      room.botTimers.set(uid, setTimeout(() => {
+        room.botTimers.delete(uid);
+        (async () => {
+          const placed = await placeSingleBotCards(this.db, roomId, uid);
+          if (placed) {
+            await checkAndAdvance(this.db, roomId);
+          }
+        })().catch((err) => {
+          console.error(`[Dealer] [${roomId}] Bot ${p.displayName} placement error:`, err);
+        });
+      }, delay));
+    }
   }
 
   private onPlacementTimeout(roomId: string): void {

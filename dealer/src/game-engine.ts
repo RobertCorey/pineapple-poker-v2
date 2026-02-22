@@ -408,10 +408,11 @@ function autoPlaceCards(cards: Card[], board: Board, count: number): void {
 }
 
 /**
- * Auto-place cards for all bot players who have cards in hand.
+ * Auto-place cards for a single bot player.
  * Uses the bot strategy to make intelligent placement decisions.
+ * Returns true if the bot placed cards (triggers checkAndAdvance).
  */
-export async function placeBotCards(db: Firestore, roomId: string): Promise<boolean> {
+export async function placeSingleBotCards(db: Firestore, roomId: string, botUid: string): Promise<boolean> {
   const gameRef = db.doc(gameDoc(roomId));
 
   return db.runTransaction(async (tx) => {
@@ -429,54 +430,44 @@ export async function placeBotCards(db: Firestore, roomId: string): Promise<bool
       game.phase !== GP.Street5
     ) return false;
 
-    const updatedPlayers: Record<string, PlayerState> = { ...game.players };
-    let changed = false;
+    const player = game.players[botUid];
+    if (!player?.isBot || player.fouled || player.currentHand.length === 0) return false;
 
-    for (const uid of game.playerOrder) {
-      const player = game.players[uid];
+    let decision;
+    if (game.street === 1) {
+      decision = botPlaceInitialDeal(player.currentHand, player.board);
+    } else {
+      decision = botPlaceStreet(player.currentHand, player.board);
+    }
 
-      // Only act on bot players with cards to place
-      if (!player.isBot) continue;
-      if (player.currentHand.length === 0) continue;
-      if (player.fouled) continue;
+    // Apply placements
+    const newBoard: Board = {
+      top: [...player.board.top],
+      middle: [...player.board.middle],
+      bottom: [...player.board.bottom],
+    };
 
-      let decision;
-      if (game.street === 1) {
-        decision = botPlaceInitialDeal(player.currentHand, player.board);
-      } else {
-        decision = botPlaceStreet(player.currentHand, player.board);
-      }
+    for (const p of decision.placements) {
+      newBoard[p.row] = [...newBoard[p.row], p.card];
+    }
 
-      // Apply placements
-      const newBoard: Board = {
-        top: [...player.board.top],
-        middle: [...player.board.middle],
-        bottom: [...player.board.bottom],
-      };
-
-      for (const p of decision.placements) {
-        newBoard[p.row] = [...newBoard[p.row], p.card];
-      }
-
-      updatedPlayers[uid] = {
+    const updatedPlayers: Record<string, PlayerState> = {
+      ...game.players,
+      [botUid]: {
         ...player,
         board: newBoard,
         currentHand: [],
-      };
+      },
+    };
 
-      tx.set(db.doc(handDoc(uid, roomId)), { cards: [] });
-      changed = true;
-      console.log(`[Dealer] [${roomId}] Bot ${player.displayName} placed cards`);
-    }
+    tx.set(db.doc(handDoc(botUid, roomId)), { cards: [] });
+    tx.update(gameRef, {
+      players: updatedPlayers,
+      updatedAt: Date.now(),
+    });
 
-    if (changed) {
-      tx.update(gameRef, {
-        players: updatedPlayers,
-        updatedAt: Date.now(),
-      });
-    }
-
-    return changed;
+    console.log(`[Dealer] [${roomId}] Bot ${player.displayName} placed cards`);
+    return true;
   });
 }
 
