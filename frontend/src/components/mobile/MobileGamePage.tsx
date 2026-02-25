@@ -1,4 +1,7 @@
-import { useState, useLayoutEffect, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import { SoundEngine } from '../../audio/SoundEngine.ts';
+import { useSoundEffects } from '../../audio/useSoundEffects.ts';
+import { useTickSound } from '../../audio/useTickSound.ts';
 import type { Card, Row, Board } from '@shared/core/types';
 import { GamePhase } from '@shared/core/types';
 import { INITIAL_DEAL_COUNT, STREET_PLACE_COUNT } from '@shared/core/constants';
@@ -96,7 +99,19 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
   const [placements, setPlacements] = useState<Placement[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [leaving, setLeaving] = useState(false);
+  const [muted, setMuted] = useState(() => SoundEngine.get().muted);
   const { message: toast, showToast } = useToast();
+  useSoundEffects(gameState, uid);
+
+  useEffect(() => {
+    const handler = () => SoundEngine.get().init();
+    document.addEventListener('touchstart', handler, { once: true });
+    document.addEventListener('click', handler, { once: true });
+    return () => {
+      document.removeEventListener('touchstart', handler);
+      document.removeEventListener('click', handler);
+    };
+  }, []);
 
   const opponentRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<HTMLDivElement>(null);
@@ -104,6 +119,8 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
   const playerSize = useContainerSize(playerRef);
 
   const countdown = useCountdown(gameState.phaseDeadline);
+  const isPlacementPhase = gameState.phase === GamePhase.InitialDeal || STREET_PHASES.has(gameState.phase);
+  useTickSound(countdown, isPlacementPhase && !submitting);
   const showTimer = (
     gameState.phase === GamePhase.InitialDeal || STREET_PHASES.has(gameState.phase)
   );
@@ -159,6 +176,7 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
 
     const newPlacements = [...placements, { card, row }];
     setPlacements(newPlacements);
+    SoundEngine.get().playCardPlace();
     setSelectedIndex(null);
 
     if (newPlacements.length === requiredPlacements) {
@@ -221,6 +239,13 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
           <span className="text-gray-500" data-testid="phase-label">
             R{gameState.round}/{gameState.totalRounds} S{gameState.street} {gameState.phase}
           </span>
+          <button
+            onClick={() => { const m = SoundEngine.get().toggleMute(); setMuted(m); }}
+            className="text-gray-400 active:text-white"
+            aria-label={muted ? 'Unmute' : 'Mute'}
+          >
+            {muted ? '\u{1F507}' : '\u{1F50A}'}
+          </button>
           <button
             onClick={handleLeave}
             disabled={leaving}

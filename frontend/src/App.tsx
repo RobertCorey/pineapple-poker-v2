@@ -75,8 +75,8 @@ function App() {
 
   const isInGame = user && gameState?.players[user.uid] !== undefined;
 
-  // Show Lobby when not in game, or when in game but in lobby phase (pre-match)
-  if (!isInGame || gameState?.phase === GamePhase.Lobby) {
+  // Show Lobby when not in game, or when in lobby phase pre-match (round 0)
+  if (!isInGame || (gameState?.phase === GamePhase.Lobby && gameState?.round === 0)) {
     return (
       <Lobby
         uid={user?.uid ?? ''}
