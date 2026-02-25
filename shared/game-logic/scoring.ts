@@ -1,6 +1,10 @@
 import {
+  BOTTOM_ROYALTIES,
   FOUL_PENALTY,
+  MIDDLE_ROYALTIES,
   SCOOP_BONUS,
+  TOP_PAIR_ROYALTIES,
+  TOP_TRIPS_ROYALTIES,
 } from '../core/constants';
 import {
   compare5CardHands,
@@ -68,6 +72,42 @@ function mapThreeCardToFiveCardRank(rank: ThreeCardHandRank): HandRank {
   }
 }
 
+// ---- Royalty calculation ----
+
+/**
+ * Calculate royalties for a complete board.
+ * Returns per-row and total royalties. Incomplete rows earn 0.
+ */
+export function calculateRoyalties(board: Board): { top: number; middle: number; bottom: number; total: number } {
+  let top = 0;
+  let middle = 0;
+  let bottom = 0;
+
+  // Top row (3-card): pairs 6+ and trips
+  if (board.top.length === 3) {
+    const eval3 = evaluate3CardHand(board.top);
+    if (eval3.handRank === ThreeCardHandRank.ThreeOfAKind) {
+      top = TOP_TRIPS_ROYALTIES[eval3.kickers[0]] ?? 0;
+    } else if (eval3.handRank === ThreeCardHandRank.Pair) {
+      top = TOP_PAIR_ROYALTIES[eval3.kickers[0]] ?? 0;
+    }
+  }
+
+  // Middle row (5-card, doubled values)
+  if (board.middle.length === 5) {
+    const eval5 = evaluate5CardHand(board.middle);
+    middle = MIDDLE_ROYALTIES[eval5.handRank] ?? 0;
+  }
+
+  // Bottom row (5-card)
+  if (board.bottom.length === 5) {
+    const eval5 = evaluate5CardHand(board.bottom);
+    bottom = BOTTOM_ROYALTIES[eval5.handRank] ?? 0;
+  }
+
+  return { top, middle, bottom, total: top + middle + bottom };
+}
+
 // ---- Pairwise scoring ----
 
 /**
@@ -94,28 +134,31 @@ export function scorePairwise(
       playerB: playerBUid,
       rowPoints: 0,
       scoopBonus: 0,
+      royalties: 0,
       total: 0,
     };
   }
 
-  // A fouled: B gets penalty
+  // A fouled: B gets penalty, no royalties
   if (playerAFouled) {
     return {
       playerA: playerAUid,
       playerB: playerBUid,
       rowPoints: -FOUL_PENALTY,
       scoopBonus: 0,
+      royalties: 0,
       total: -FOUL_PENALTY,
     };
   }
 
-  // B fouled: A gets penalty
+  // B fouled: A gets penalty, no royalties
   if (playerBFouled) {
     return {
       playerA: playerAUid,
       playerB: playerBUid,
       rowPoints: FOUL_PENALTY,
       scoopBonus: 0,
+      royalties: 0,
       total: FOUL_PENALTY,
     };
   }
@@ -143,12 +186,18 @@ export function scorePairwise(
     scoopBonus = -SCOOP_BONUS;
   }
 
+  // Royalties: net differential (A's total - B's total)
+  const aRoyalties = calculateRoyalties(playerABoard).total;
+  const bRoyalties = calculateRoyalties(playerBBoard).total;
+  const royalties = aRoyalties - bRoyalties;
+
   return {
     playerA: playerAUid,
     playerB: playerBUid,
     rowPoints,
     scoopBonus,
-    total: rowPoints + scoopBonus,
+    royalties,
+    total: rowPoints + scoopBonus + royalties,
   };
 }
 
@@ -197,6 +246,7 @@ export function scoreAllPlayers(
         playerB: uidA,
         rowPoints: -result.rowPoints,
         scoopBonus: -result.scoopBonus,
+        royalties: -result.royalties,
         total: -result.total,
       };
       scores.get(uidB)!.pairwise.push(invertedResult);

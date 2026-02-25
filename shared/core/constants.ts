@@ -1,5 +1,58 @@
 import { HandRank, Rank, ThreeCardHandRank } from './types';
 
+// ---- Royalty tables ----
+
+/** Bottom row (5-card) royalties, keyed by HandRank. */
+export const BOTTOM_ROYALTIES: Record<number, number> = {
+  [HandRank.Straight]: 2,
+  [HandRank.Flush]: 4,
+  [HandRank.FullHouse]: 6,
+  [HandRank.FourOfAKind]: 10,
+  [HandRank.StraightFlush]: 15,
+  [HandRank.RoyalFlush]: 25,
+};
+
+/** Middle row (5-card, doubled) royalties, keyed by HandRank. */
+export const MIDDLE_ROYALTIES: Record<number, number> = {
+  [HandRank.ThreeOfAKind]: 2,
+  [HandRank.Straight]: 4,
+  [HandRank.Flush]: 8,
+  [HandRank.FullHouse]: 12,
+  [HandRank.FourOfAKind]: 20,
+  [HandRank.StraightFlush]: 30,
+  [HandRank.RoyalFlush]: 50,
+};
+
+/** Top row pair royalties, keyed by Rank (6s through Aces). */
+export const TOP_PAIR_ROYALTIES: Record<number, number> = {
+  [Rank.Six]: 1,
+  [Rank.Seven]: 2,
+  [Rank.Eight]: 3,
+  [Rank.Nine]: 4,
+  [Rank.Ten]: 5,
+  [Rank.Jack]: 6,
+  [Rank.Queen]: 7,
+  [Rank.King]: 8,
+  [Rank.Ace]: 9,
+};
+
+/** Top row trips royalties, keyed by Rank (2s through Aces). */
+export const TOP_TRIPS_ROYALTIES: Record<number, number> = {
+  [Rank.Two]: 10,
+  [Rank.Three]: 11,
+  [Rank.Four]: 12,
+  [Rank.Five]: 13,
+  [Rank.Six]: 14,
+  [Rank.Seven]: 15,
+  [Rank.Eight]: 16,
+  [Rank.Nine]: 17,
+  [Rank.Ten]: 18,
+  [Rank.Jack]: 19,
+  [Rank.Queen]: 20,
+  [Rank.King]: 21,
+  [Rank.Ace]: 22,
+};
+
 /** Points deducted per opponent when fouled. */
 export const FOUL_PENALTY = 6;
 
