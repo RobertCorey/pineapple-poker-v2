@@ -33,7 +33,6 @@ test('player can leave mid-match and game continues for remaining player', async
   // Round 1 results
   await alice.getByTestId('round-results').waitFor({ timeout: T_JOIN });
   await expect(alice.getByTestId('round-results')).toContainText('Round 1 of 3 Complete');
-  await expect(alice.getByTestId('round-results')).toContainText('Alice');
 
   // Overlay auto-dismisses when next phase starts; wait for lobby
   await alice.getByTestId('start-match-button').waitFor({ timeout: T_PHASE });

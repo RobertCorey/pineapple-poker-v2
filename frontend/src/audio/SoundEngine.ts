@@ -9,6 +9,9 @@ class SoundEngine {
   private _muted: boolean;
   private samples: Record<string, Howl> = {};
   private samplesLoaded = false;
+  private ambientIntervalId: ReturnType<typeof setInterval> | null = null;
+  private ambientBeat = 0;
+  private ambientNextBeatTime = 0;
 
   private constructor() {
     this._muted = localStorage.getItem(MUTE_KEY) === 'true';
@@ -169,12 +172,131 @@ class SoundEngine {
     this.playTone(784, 0.12, 'sine', 0.12);
   }
 
+  /** Tick sound during score count-up. Progress is 0→1 as count approaches target. */
+  playScoreTick(progress: number): void {
+    const absProgress = Math.abs(progress);
+    // Rising pitch as we approach the final value
+    const freq = 300 + absProgress * 500;
+    const gain = 0.08 + absProgress * 0.07;
+    this.playTone(freq, 0.06, 'sine', gain);
+    // Layer a quiet chip sound every few ticks
+    if (Math.random() < 0.35) {
+      this.playRandom('chip-lay', 3);
+    }
+  }
+
+  /** Finish sound when count-up reaches its target. */
+  playScoreCountFinish(isPositive: boolean): void {
+    if (isPositive) {
+      this.playArpeggio([523, 659, 784], 0.08, 'sine', 0.25);
+      this.playRandom('chips-stack', 6);
+    } else {
+      this.playArpeggio([392, 311, 262], 0.08, 'sawtooth', 0.2);
+      this.playRandom('chips-collide', 4);
+    }
+  }
+
+  /** Celebratory fanfare for the match winner reveal. */
+  playMatchWinnerFanfare(): void {
+    // Bright ascending arpeggio + chips stacking
+    this.playArpeggio([523, 659, 784, 1047], 0.1, 'sine', 0.3);
+    setTimeout(() => {
+      this.playRandom('chips-stack', 6);
+      this.playRandom('chips-handle', 6);
+    }, 300);
+  }
+
+  /** Sad trombone for losers. */
+  playMatchLoserReveal(): void {
+    this.playArpeggio([311, 262, 233], 0.12, 'sawtooth', 0.15);
+  }
+
   playCardPlace(): void {
     this.playRandom('card-place', 4);
   }
 
   playCardDeal(): void {
     this.playSample('card-fan-1');
+  }
+
+  /** Lo-fi ambient loop — sparse C minor melody with sample accents. */
+  startAmbientLoop(): void {
+    if (this.ambientIntervalId !== null || !this.ctx) return;
+
+    // Sparse C minor pentatonic melody with rests. 0 = silence.
+    // Mournful, lo-fi feel: half the steps are rests.
+    const melody: Array<{ freq: number; sample?: [string, number] }> = [
+      { freq: 311, sample: ['chip-lay-1', 0.10] },  // Eb4
+      { freq: 0 },
+      { freq: 262 },                                 // C4
+      { freq: 0 },
+      { freq: 196, sample: ['card-place-2', 0.06] }, // G3
+      { freq: 0 },
+      { freq: 0 },
+      { freq: 233 },                                 // Bb3
+      { freq: 0 },
+      { freq: 0 },
+      { freq: 175, sample: ['chip-lay-2', 0.08] },   // F3
+      { freq: 0 },
+      { freq: 156 },                                 // Eb3
+      { freq: 0 },
+      { freq: 0,  sample: ['chips-stack-1', 0.05] },
+      { freq: 0 },
+    ];
+    const stepDuration = 0.5; // 500ms per step (8s loop)
+    const noteDuration = 0.42;
+    const detuneAmount = 4; // cents — lo-fi wobble
+
+    this.ambientBeat = 0;
+    this.ambientNextBeatTime = this.ctx.currentTime + 0.05;
+
+    const lookAhead = 0.2; // schedule 200ms ahead
+
+    this.ambientIntervalId = setInterval(() => {
+      if (!this.ctx || this._muted) return;
+
+      while (this.ambientNextBeatTime < this.ctx.currentTime + lookAhead) {
+        const beat = this.ambientBeat % 16;
+        const step = melody[beat];
+
+        // Schedule slightly detuned pair of sine oscillators (lo-fi warmth)
+        if (step.freq > 0) {
+          for (const detune of [-detuneAmount, detuneAmount]) {
+            const osc = this.ctx.createOscillator();
+            const vol = this.ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.value = step.freq;
+            osc.detune.value = detune;
+            vol.gain.value = 0.05;
+
+            const fadeStart = this.ambientNextBeatTime + noteDuration - 0.06;
+            vol.gain.setValueAtTime(0.05, fadeStart);
+            vol.gain.linearRampToValueAtTime(0, fadeStart + 0.06);
+
+            osc.connect(vol);
+            vol.connect(this.ctx.destination);
+            osc.start(this.ambientNextBeatTime);
+            osc.stop(this.ambientNextBeatTime + noteDuration);
+          }
+        }
+
+        // Sample accent
+        if (step.sample) {
+          this.playSample(step.sample[0], step.sample[1]);
+        }
+
+        this.ambientNextBeatTime += stepDuration;
+        this.ambientBeat++;
+      }
+    }, 100);
+  }
+
+  stopAmbientLoop(): void {
+    if (this.ambientIntervalId !== null) {
+      clearInterval(this.ambientIntervalId);
+      this.ambientIntervalId = null;
+    }
+    this.ambientBeat = 0;
   }
 
   playScoreReveal(intensity: number): void {

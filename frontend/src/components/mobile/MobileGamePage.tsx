@@ -220,6 +220,15 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
   const isObserver = !gameState.playerOrder.includes(uid);
   const currentPlayer = gameState.players[uid];
   const numOpponents = gameState.playerOrder.filter((id) => id !== uid).length;
+
+  // Compute current player's rank by score
+  const playerRank = (() => {
+    const sorted = gameState.playerOrder
+      .map((id) => gameState.players[id])
+      .filter(Boolean)
+      .sort((a, b) => b.score - a.score);
+    return sorted.findIndex((p) => p.uid === uid) + 1;
+  })();
   const opponentLayout = computeOpponentGridLayout(opponentSize.w, opponentSize.h, numOpponents);
   const playerCardW = computePlayerCardWidth(playerSize.w, playerSize.h);
 
@@ -284,6 +293,7 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
                 hasCardSelected={selectedIndex !== null && !submitting}
                 cardWidthPx={playerCardW}
                 score={currentPlayer.score}
+                rank={playerRank}
               />
             )}
           </div>

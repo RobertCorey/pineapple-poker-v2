@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { SoundEngine } from './SoundEngine';
 import { scoreIntensity } from './intensity';
+import { useMatchCompleteAmbience } from './useMatchCompleteAmbience';
 
 const SCORE_SCENARIOS = [
   { label: 'Big win (scoop 3p)', net: 18, players: 3, desc: 'arpeggio + chips-stack + chips-handle' },
@@ -163,6 +164,12 @@ export function SoundTestPage() {
         </div>
       </section>
 
+      {/* Ambient Loop */}
+      <section className="mb-8">
+        <h2 className="text-sm text-gray-400 uppercase tracking-wider mb-3">Ambient Loop (Match Complete)</h2>
+        <AmbientLoopPlayer />
+      </section>
+
       {/* Other sounds */}
       <section className="mb-8">
         <h2 className="text-sm text-gray-400 uppercase tracking-wider mb-3">Other Sounds</h2>
@@ -181,6 +188,30 @@ export function SoundTestPage() {
           </button>
         </div>
       </section>
+    </div>
+  );
+}
+
+function AmbientLoopPlayer() {
+  const [playing, setPlaying] = useState(false);
+  const toggle = useCallback(() => setPlaying(p => !p), []);
+  useMatchCompleteAmbience(playing);
+
+  return (
+    <div className="flex items-center gap-3">
+      <button
+        onClick={toggle}
+        className={`px-4 py-2 rounded text-sm font-bold ${
+          playing
+            ? 'bg-red-800 hover:bg-red-700'
+            : 'bg-green-800 hover:bg-green-700'
+        }`}
+      >
+        {playing ? 'Stop' : 'Play'}
+      </button>
+      <span className="text-xs text-gray-500">
+        {playing ? 'Looping — 16-step melody at ~96 BPM with sample accents' : 'Click to preview the match complete ambient loop'}
+      </span>
     </div>
   );
 }

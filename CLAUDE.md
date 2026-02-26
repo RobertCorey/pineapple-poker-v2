@@ -198,7 +198,6 @@ Players who join mid-round become observers (added to `players` but NOT `playerO
 - Card placement UI state (selections, placements, discards) lives in `GamePage` component state
 - Cloud Functions called via `httpsCallable` from firebase/functions SDK — all include `roomId`
 - Frontend imports shared code via `@shared/` alias (e.g., `import type { Card } from '@shared/core/types'`)
-- Dev-mode minimal UI: monospace font, minimal styling, raw phase/street display
 
 - `handDescription.ts` utility: human-readable hand labels (e.g., "Pair (K)", "Flush (A-high)")
 - `PlayerBoard` shows `RowEval` labels on completed rows using hand-evaluation functions

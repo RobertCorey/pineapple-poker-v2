@@ -65,6 +65,7 @@ interface PlayerBoardProps {
   cardWidthPx: number;
   score?: number;
   disconnected?: boolean;
+  rank?: number;
 }
 
 function RowOverlay({ label, cardWidthPx }: { label: string; cardWidthPx: number }) {
@@ -80,7 +81,7 @@ function RowOverlay({ label, cardWidthPx }: { label: string; cardWidthPx: number
 
 export function PlayerBoard({
   board, playerName, fouled, isCurrentPlayer, onRowClick, hasCardSelected,
-  cardWidthPx, score, disconnected,
+  cardWidthPx, score, disconnected, rank,
 }: PlayerBoardProps) {
   const topSlots = padRow(board.top, 3);
   const middleSlots = padRow(board.middle, 5);
@@ -123,6 +124,9 @@ export function PlayerBoard({
           <span className="flex-shrink-0" style={{ color: score >= 0 ? '#4ade80' : '#f87171' }}>
             [{score >= 0 ? `+${score}` : score}]
           </span>
+        )}
+        {rank !== undefined && (
+          <span className="text-yellow-400 flex-shrink-0">{rank === 1 ? '\u{1F451}' : `#${rank}`}</span>
         )}
         {fouled && <span className="text-red-400 flex-shrink-0">[F]</span>}
         {disconnected && <span className="text-red-500 flex-shrink-0">[DC]</span>}
