@@ -148,6 +148,7 @@ export interface PairwiseResult {
   playerB: string;
   rowPoints: number;
   scoopBonus: number;
+  royalties: number;   // net royalty differential (A's total - B's total)
   total: number;
 }
 

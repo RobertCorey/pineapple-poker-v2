@@ -51,3 +51,9 @@ test-results/
 # Personal notes
 notes.txt
 notes/
+
+# Asset source files
+kenney_casino-audio/
+
+# Claude Code
+.claude/worktrees/

@@ -25,7 +25,7 @@ export function PairwiseBreakdown({ players, roundResults }: PairwiseBreakdownPr
             <div key={`${pA.uid}-${pB.uid}`} className="flex justify-between gap-2 mb-1">
               <span className="text-gray-400 truncate">{pA.displayName} vs {pB.displayName}</span>
               <span className="whitespace-nowrap">
-                {pairwiseLabel(result.rowPoints, result.scoopBonus, result.total, aFouled, bFouled)}
+                {pairwiseLabel(result.rowPoints, result.scoopBonus, result.total, aFouled, bFouled, result.royalties)}
               </span>
             </div>
           );

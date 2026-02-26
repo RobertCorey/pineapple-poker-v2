@@ -1,4 +1,5 @@
 import type { GameState } from '@shared/core/types';
+import { isFoul } from '@shared/game-logic/scoring';
 import { PlayerBoard } from '../PlayerBoard.tsx';
 
 interface MobileOpponentGridProps {
@@ -9,7 +10,9 @@ interface MobileOpponentGridProps {
 }
 
 export function MobileOpponentGrid({ gameState, currentUid, cardWidthPx, cols }: MobileOpponentGridProps) {
-  const otherPlayers = gameState.playerOrder.filter((uid) => uid !== currentUid);
+  const otherPlayers = gameState.playerOrder
+    .filter((uid) => uid !== currentUid)
+    .sort((a, b) => (gameState.players[b]?.score ?? 0) - (gameState.players[a]?.score ?? 0));
   const observers = Object.values(gameState.players).filter(
     (p) => !gameState.playerOrder.includes(p.uid)
   );
@@ -21,6 +24,14 @@ export function MobileOpponentGrid({ gameState, currentUid, cardWidthPx, cols }:
       </div>
     );
   }
+
+  const rankByUid = new Map(
+    gameState.playerOrder
+      .map((uid) => gameState.players[uid])
+      .filter(Boolean)
+      .sort((a, b) => b.score - a.score)
+      .map((p, i) => [p.uid, i + 1] as const),
+  );
 
   const boardGap = Math.max(2, Math.round(cardWidthPx * 0.15));
 
@@ -43,10 +54,11 @@ export function MobileOpponentGrid({ gameState, currentUid, cardWidthPx, cols }:
                 key={uid}
                 board={player.board}
                 playerName={player.displayName}
-                fouled={player.fouled}
+                fouled={player.fouled || isFoul(player.board)}
                 cardWidthPx={cardWidthPx}
                 score={player.score}
                 disconnected={player.disconnected}
+                rank={rankByUid.get(uid)}
               />
             );
           })}

@@ -8,10 +8,12 @@ export function pairwiseLabel(
   total: number,
   aFouled: boolean,
   bFouled: boolean,
+  royalties: number = 0,
 ): string {
   if (aFouled && bFouled) return `both fouled = ${formatScore(total)}`;
   if (aFouled || bFouled) return `foul = ${formatScore(total)}`;
-  if (scoopBonus !== 0)
-    return `rows ${formatScore(rowPoints)} scoop ${formatScore(scoopBonus)} = ${formatScore(total)}`;
-  return `rows ${formatScore(rowPoints)} = ${formatScore(total)}`;
+  const parts = [`rows ${formatScore(rowPoints)}`];
+  if (scoopBonus !== 0) parts.push(`scoop ${formatScore(scoopBonus)}`);
+  if (royalties !== 0) parts.push(`royalties ${formatScore(royalties)}`);
+  return `${parts.join(' ')} = ${formatScore(total)}`;
 }

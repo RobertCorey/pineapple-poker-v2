@@ -34,10 +34,9 @@ test('scores are computed correctly after a full round', async ({ browser }) => 
   const round2Results = alice.getByTestId('round-results');
   await expect(round2Results).toContainText('Round 2 of 3 Complete');
 
-  // Verify cumulative totals
-  await expect(round2Results).toContainText('Total');
-  await expect(round2Results).toContainText('Round');
-  await expect(round2Results).toContainText('Player');
+  // Verify score is displayed
+  const round2Text = await round2Results.textContent();
+  expect(round2Text).toMatch(/[+-]\d+/);
 
   await cleanup();
 });

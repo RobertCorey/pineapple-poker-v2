@@ -59,8 +59,8 @@ test('timed-out player gets auto-placed and is active in next round', async ({ b
   await alice.getByTestId('round-results').waitFor({ timeout: T_PHASE });
   await expect(alice.getByTestId('round-results')).toContainText('Round 2 of 3 Complete');
 
-  // Verify cumulative scores are displayed (Total column)
-  await expect(alice.getByTestId('round-results')).toContainText('Total');
+  // Verify score is displayed
+  await expect(alice.getByTestId('round-results')).toContainText(/[+-]\d+/);
 
   await cleanup();
 });

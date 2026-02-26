@@ -1,7 +1,11 @@
-import { useState, useLayoutEffect, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import { SoundEngine } from '../../audio/SoundEngine.ts';
+import { useSoundEffects } from '../../audio/useSoundEffects.ts';
+import { useTickSound } from '../../audio/useTickSound.ts';
 import type { Card, Row, Board } from '@shared/core/types';
 import { GamePhase } from '@shared/core/types';
 import { INITIAL_DEAL_COUNT, STREET_PLACE_COUNT } from '@shared/core/constants';
+import { isFoul } from '@shared/game-logic/scoring';
 import { placeCards, leaveGame } from '../../api.ts';
 import { trackEvent } from '../../firebase.ts';
 import { useCountdown } from '../../hooks/useCountdown.ts';
@@ -96,7 +100,19 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
   const [placements, setPlacements] = useState<Placement[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [leaving, setLeaving] = useState(false);
+  const [muted, setMuted] = useState(() => SoundEngine.get().muted);
   const { message: toast, showToast } = useToast();
+  useSoundEffects(gameState, uid);
+
+  useEffect(() => {
+    const handler = () => SoundEngine.get().init();
+    document.addEventListener('touchstart', handler, { once: true });
+    document.addEventListener('click', handler, { once: true });
+    return () => {
+      document.removeEventListener('touchstart', handler);
+      document.removeEventListener('click', handler);
+    };
+  }, []);
 
   const opponentRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<HTMLDivElement>(null);
@@ -104,6 +120,8 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
   const playerSize = useContainerSize(playerRef);
 
   const countdown = useCountdown(gameState.phaseDeadline);
+  const isPlacementPhase = gameState.phase === GamePhase.InitialDeal || STREET_PHASES.has(gameState.phase);
+  useTickSound(countdown, isPlacementPhase && !submitting);
   const showTimer = (
     gameState.phase === GamePhase.InitialDeal || STREET_PHASES.has(gameState.phase)
   );
@@ -159,6 +177,7 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
 
     const newPlacements = [...placements, { card, row }];
     setPlacements(newPlacements);
+    SoundEngine.get().playCardPlace();
     setSelectedIndex(null);
 
     if (newPlacements.length === requiredPlacements) {
@@ -201,6 +220,15 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
   const isObserver = !gameState.playerOrder.includes(uid);
   const currentPlayer = gameState.players[uid];
   const numOpponents = gameState.playerOrder.filter((id) => id !== uid).length;
+
+  // Compute current player's rank by score
+  const playerRank = (() => {
+    const sorted = gameState.playerOrder
+      .map((id) => gameState.players[id])
+      .filter(Boolean)
+      .sort((a, b) => b.score - a.score);
+    return sorted.findIndex((p) => p.uid === uid) + 1;
+  })();
   const opponentLayout = computeOpponentGridLayout(opponentSize.w, opponentSize.h, numOpponents);
   const playerCardW = computePlayerCardWidth(playerSize.w, playerSize.h);
 
@@ -221,6 +249,13 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
           <span className="text-gray-500" data-testid="phase-label">
             R{gameState.round}/{gameState.totalRounds} S{gameState.street} {gameState.phase}
           </span>
+          <button
+            onClick={() => { const m = SoundEngine.get().toggleMute(); setMuted(m); }}
+            className="text-gray-400 active:text-white"
+            aria-label={muted ? 'Unmute' : 'Mute'}
+          >
+            {muted ? '\u{1F507}' : '\u{1F50A}'}
+          </button>
           <button
             onClick={handleLeave}
             disabled={leaving}
@@ -252,12 +287,13 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
               <PlayerBoard
                 board={mergedBoard}
                 playerName={`${currentPlayer.displayName} (You)`}
-                fouled={currentPlayer.fouled}
+                fouled={currentPlayer.fouled || isFoul(mergedBoard)}
                 isCurrentPlayer
                 onRowClick={selectedIndex !== null && !submitting ? handleRowClick : undefined}
                 hasCardSelected={selectedIndex !== null && !submitting}
                 cardWidthPx={playerCardW}
                 score={currentPlayer.score}
+                rank={playerRank}
               />
             )}
           </div>
