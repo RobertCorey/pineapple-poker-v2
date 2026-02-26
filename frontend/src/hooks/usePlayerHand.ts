@@ -13,11 +13,18 @@ export function usePlayerHand(uid: string | undefined, roomId: string | null) {
       doc(db, 'games', roomId, 'hands', uid),
       (snap) => {
         if (snap.exists()) {
-          const data = parseHandDoc(snap.data());
-          setHand(data.cards ?? []);
+          try {
+            const data = parseHandDoc(snap.data());
+            setHand(data.cards ?? []);
+          } catch (err) {
+            console.error('[usePlayerHand] Failed to parse snapshot:', err);
+          }
         } else {
           setHand([]);
         }
+      },
+      (err) => {
+        console.error('[usePlayerHand] Listener error:', err);
       },
     );
     return unsub;
