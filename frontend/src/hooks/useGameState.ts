@@ -27,13 +27,18 @@ export function useGameState(roomId: string | null) {
       doc(db, 'games', roomId),
       (snap) => {
         if (snap.exists()) {
-          setGameState(parseGameState(snap.data()));
+          try {
+            setGameState(parseGameState(snap.data()));
+          } catch (err) {
+            console.error('[useGameState] Failed to parse snapshot:', err);
+          }
         } else {
           setGameState(null);
         }
         setLoading(false);
       },
-      () => {
+      (err) => {
+        console.error('[useGameState] Listener error:', err);
         setLoading(false);
       },
     );

@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Component } from 'react';
+import type { ReactNode, ErrorInfo } from 'react';
 import { useAuth } from './hooks/useAuth.ts';
 import { useGameState } from './hooks/useGameState.ts';
 import { usePlayerHand } from './hooks/usePlayerHand.ts';
@@ -6,6 +7,38 @@ import { RoomSelector } from './components/RoomSelector.tsx';
 import { Lobby } from './components/Lobby.tsx';
 import { MobileGamePage } from './components/mobile/MobileGamePage.tsx';
 import { GamePhase } from '@shared/core/types';
+
+class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null as Error | null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error('[ErrorBoundary] Uncaught error:', error, info.componentStack);
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center font-mono">
+          <div className="text-center p-6">
+            <p className="text-red-400 text-lg mb-2">Something went wrong</p>
+            <p className="text-gray-500 text-sm mb-4">{this.state.error.message}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-green-700 hover:bg-green-600 text-white text-sm"
+            >
+              Reload
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 function getRoomFromUrl(): string | null {
   const params = new URLSearchParams(window.location.search);
@@ -104,4 +137,12 @@ function App() {
   );
 }
 
-export default App;
+function AppWithErrorBoundary() {
+  return (
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
+  );
+}
+
+export default AppWithErrorBoundary;
