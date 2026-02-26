@@ -30,13 +30,41 @@ class SoundEngine {
 
   private loadSamples(): void {
     if (this.samplesLoaded) return;
-    this.samples = {
-      coins: new Howl({ src: ['/sounds/coins.mp3'], volume: 0.6 }),
-      chime: new Howl({ src: ['/sounds/chime.mp3'], volume: 0.5 }),
-      thud: new Howl({ src: ['/sounds/thud.mp3'], volume: 0.4 }),
-      crowd: new Howl({ src: ['/sounds/crowd.mp3'], volume: 0.3 }),
-    };
+
+    // Card placement variants
+    for (let i = 1; i <= 4; i++) {
+      this.samples[`card-place-${i}`] = new Howl({ src: [`/sounds/card-place-${i}.ogg`], volume: 0.4 });
+    }
+
+    // Card deal
+    this.samples['card-fan-1'] = new Howl({ src: ['/sounds/card-fan-1.ogg'], volume: 0.5 });
+
+    // Chip lay (neutral score)
+    for (let i = 1; i <= 3; i++) {
+      this.samples[`chip-lay-${i}`] = new Howl({ src: [`/sounds/chip-lay-${i}.ogg`], volume: 0.5 });
+    }
+
+    // Chips stack (win)
+    for (let i = 1; i <= 6; i++) {
+      this.samples[`chips-stack-${i}`] = new Howl({ src: [`/sounds/chips-stack-${i}.ogg`], volume: 0.5 });
+    }
+
+    // Chips collide (loss)
+    for (let i = 1; i <= 4; i++) {
+      this.samples[`chips-collide-${i}`] = new Howl({ src: [`/sounds/chips-collide-${i}.ogg`], volume: 0.5 });
+    }
+
+    // Chips handle (big win/loss accent)
+    for (let i = 1; i <= 6; i++) {
+      this.samples[`chips-handle-${i}`] = new Howl({ src: [`/sounds/chips-handle-${i}.ogg`], volume: 0.4 });
+    }
+
     this.samplesLoaded = true;
+  }
+
+  private playRandom(prefix: string, count: number): void {
+    const i = Math.floor(Math.random() * count) + 1;
+    this.playSample(`${prefix}-${i}`);
   }
 
   private playSample(name: string, volume?: number): void {
@@ -112,28 +140,41 @@ class SoundEngine {
   }
 
   playFoulAlert(): void {
-    this.playTone(220, 0.2, 'square', 0.25);
+    // Dissonant descending chord — matches the FOUL overlay slamming down
+    this.playArpeggio([311, 233, 185], 0.1, 'square', 0.2);
+    this.playRandom('chips-collide', 4);
+  }
+
+  /** Play when a row overlay appears with royalties. Pitch scales with royalty value. */
+  playRoyaltyReveal(royalties: number): void {
+    if (royalties <= 0) return;
+    // Base note C5, scale up with royalty value (capped at 50)
+    const base = 523;
+    if (royalties >= 15) {
+      // Big royalty: bright 4-note arpeggio + chips-handle
+      this.playArpeggio([base, base * 1.25, base * 1.5, base * 2], 0.08, 'sine', 0.25);
+      this.playRandom('chips-handle', 6);
+    } else if (royalties >= 6) {
+      // Medium royalty: 3-note arpeggio + chips-stack
+      this.playArpeggio([base, base * 1.25, base * 1.5], 0.1, 'sine', 0.2);
+      this.playRandom('chips-stack', 6);
+    } else {
+      // Small royalty: 2-note shimmer
+      this.playArpeggio([base, base * 1.5], 0.1, 'sine', 0.18);
+    }
+  }
+
+  /** Subtle chime when a row is completed (non-royalty hand worth showing). */
+  playRowComplete(): void {
+    this.playTone(784, 0.12, 'sine', 0.12);
   }
 
   playCardPlace(): void {
-    if (this._muted || !this.ctx) return;
-    // Short white noise burst — tactile "tap" feel
-    const buffer = this.ctx.createBuffer(1, this.ctx.sampleRate * 0.02, this.ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < data.length; i++) {
-      data[i] = (Math.random() * 2 - 1) * (1 - i / data.length); // decay envelope
-    }
-    const source = this.ctx.createBufferSource();
-    source.buffer = buffer;
-    const vol = this.ctx.createGain();
-    vol.gain.value = 0.08;
-    source.connect(vol);
-    vol.connect(this.ctx.destination);
-    source.start();
+    this.playRandom('card-place', 4);
   }
 
   playCardDeal(): void {
-    this.playArpeggio([600, 600, 600], 0.03, 'sine', 0.1);
+    this.playSample('card-fan-1');
   }
 
   playScoreReveal(intensity: number): void {
@@ -152,14 +193,23 @@ class SoundEngine {
       this.playArpeggio([262, 208, 175, 156], 0.12, 'sawtooth', 0.3);
     }
 
-    // Layered samples
-    if (intensity > 0.8) {
-      this.playSample('coins');
-      this.playSample('crowd');
+    // Layered Kenney samples
+    if (intensity > 0.5) {
+      this.playRandom('chips-stack', 6);
+      this.playRandom('chips-handle', 6);
     } else if (intensity > 0.2) {
-      this.playSample('chime');
-    } else if (intensity < -0.3) {
-      this.playSample('thud');
+      this.playRandom('chips-stack', 6);
+    } else if (intensity === 0) {
+      this.playRandom('chip-lay', 3);
+    } else if (intensity > 0) {
+      // Tiny win — no sample
+    } else if (intensity > -0.3) {
+      // Tiny loss — no sample
+    } else if (intensity > -0.5) {
+      this.playRandom('chips-collide', 4);
+    } else {
+      this.playRandom('chips-collide', 4);
+      this.playRandom('chips-handle', 6);
     }
   }
 }

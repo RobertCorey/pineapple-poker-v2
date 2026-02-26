@@ -1,4 +1,5 @@
 import type { GameState } from '@shared/core/types';
+import { isFoul } from '@shared/game-logic/scoring';
 import { PlayerBoard } from '../PlayerBoard.tsx';
 
 interface MobileOpponentGridProps {
@@ -43,7 +44,7 @@ export function MobileOpponentGrid({ gameState, currentUid, cardWidthPx, cols }:
                 key={uid}
                 board={player.board}
                 playerName={player.displayName}
-                fouled={player.fouled}
+                fouled={player.fouled || isFoul(player.board)}
                 cardWidthPx={cardWidthPx}
                 score={player.score}
                 disconnected={player.disconnected}

@@ -3,17 +3,17 @@ import { SoundEngine } from './SoundEngine';
 import { scoreIntensity } from './intensity';
 
 const SCORE_SCENARIOS = [
-  { label: 'Big win (scoop 3p)', net: 18, players: 3, desc: 'intensity > 0.8 — arpeggio + coins + crowd' },
-  { label: 'Big win (scoop 2p)', net: 9, players: 2, desc: 'intensity = 1.0 — arpeggio + coins + crowd' },
-  { label: 'Solid win', net: 5, players: 2, desc: 'intensity ~0.56 — 4-note rising arpeggio + chime' },
-  { label: 'Small win', net: 3, players: 2, desc: 'intensity ~0.33 — 2-note rising + chime' },
-  { label: 'Tiny win', net: 1, players: 2, desc: 'intensity ~0.11 — 2-note rising' },
-  { label: 'Break even', net: 0, players: 2, desc: 'intensity = 0 — single soft tone' },
-  { label: 'Tiny loss', net: -1, players: 2, desc: 'intensity ~-0.11 — 2-note descending' },
-  { label: 'Small loss', net: -3, players: 2, desc: 'intensity ~-0.33 — 2-note descending + thud' },
-  { label: 'Solid loss', net: -5, players: 2, desc: 'intensity ~-0.56 — 4-note descending + thud' },
-  { label: 'Big loss (scoop 2p)', net: -9, players: 2, desc: 'intensity = -1.0 — 4-note descending + thud' },
-  { label: 'Big loss (scoop 3p)', net: -18, players: 3, desc: 'intensity = -1.0 — 4-note descending + thud' },
+  { label: 'Big win (scoop 3p)', net: 18, players: 3, desc: 'arpeggio + chips-stack + chips-handle' },
+  { label: 'Big win (scoop 2p)', net: 9, players: 2, desc: 'arpeggio + chips-stack + chips-handle' },
+  { label: 'Solid win', net: 5, players: 2, desc: '4-note rising + chips-stack' },
+  { label: 'Small win', net: 3, players: 2, desc: '2-note rising + chips-stack' },
+  { label: 'Tiny win', net: 1, players: 2, desc: '2-note rising (no sample)' },
+  { label: 'Break even', net: 0, players: 2, desc: 'soft tone + chip-lay' },
+  { label: 'Tiny loss', net: -1, players: 2, desc: '2-note descending (no sample)' },
+  { label: 'Small loss', net: -3, players: 2, desc: '2-note descending + chips-collide' },
+  { label: 'Solid loss', net: -5, players: 2, desc: '4-note descending + chips-collide' },
+  { label: 'Big loss (scoop 2p)', net: -9, players: 2, desc: '4-note descending + chips-collide + chips-handle' },
+  { label: 'Big loss (scoop 3p)', net: -18, players: 3, desc: '4-note descending + chips-collide + chips-handle' },
 ];
 
 const TICK_LEVELS = [
@@ -121,6 +121,48 @@ export function SoundTestPage() {
         </div>
       </section>
 
+      {/* Row & Royalty Sounds */}
+      <section className="mb-8">
+        <h2 className="text-sm text-gray-400 uppercase tracking-wider mb-3">Row Overlays & Royalties</h2>
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={() => engine.playRowComplete()}
+            className="px-3 py-2 rounded bg-gray-800 hover:bg-gray-700 text-sm"
+            title="Subtle chime when a row fills (no royalty)"
+          >
+            Row Complete
+          </button>
+          <button
+            onClick={() => engine.playRoyaltyReveal(2)}
+            className="px-3 py-2 rounded bg-gray-800 hover:bg-gray-700 text-sm"
+            title="Small royalty (e.g. Straight bottom +2)"
+          >
+            Royalty +2
+          </button>
+          <button
+            onClick={() => engine.playRoyaltyReveal(8)}
+            className="px-3 py-2 rounded bg-gray-800 hover:bg-gray-700 text-sm"
+            title="Medium royalty (e.g. Flush middle +8)"
+          >
+            Royalty +8
+          </button>
+          <button
+            onClick={() => engine.playRoyaltyReveal(22)}
+            className="px-3 py-2 rounded bg-gray-800 hover:bg-gray-700 text-sm"
+            title="Big royalty (e.g. Trip Aces top +22)"
+          >
+            Royalty +22
+          </button>
+          <button
+            onClick={() => engine.playFoulAlert()}
+            className="px-3 py-2 rounded bg-red-900 hover:bg-red-800 text-sm"
+            title="Dissonant chord + chips-collide"
+          >
+            Foul Alert
+          </button>
+        </div>
+      </section>
+
       {/* Other sounds */}
       <section className="mb-8">
         <h2 className="text-sm text-gray-400 uppercase tracking-wider mb-3">Other Sounds</h2>
@@ -136,12 +178,6 @@ export function SoundTestPage() {
             className="px-3 py-2 rounded bg-gray-800 hover:bg-gray-700 text-sm"
           >
             Card Deal
-          </button>
-          <button
-            onClick={() => engine.playFoulAlert()}
-            className="px-3 py-2 rounded bg-gray-800 hover:bg-gray-700 text-sm"
-          >
-            Foul Alert
           </button>
         </div>
       </section>

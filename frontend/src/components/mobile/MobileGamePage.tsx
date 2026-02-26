@@ -5,6 +5,7 @@ import { useTickSound } from '../../audio/useTickSound.ts';
 import type { Card, Row, Board } from '@shared/core/types';
 import { GamePhase } from '@shared/core/types';
 import { INITIAL_DEAL_COUNT, STREET_PLACE_COUNT } from '@shared/core/constants';
+import { isFoul } from '@shared/game-logic/scoring';
 import { placeCards, leaveGame } from '../../api.ts';
 import { trackEvent } from '../../firebase.ts';
 import { useCountdown } from '../../hooks/useCountdown.ts';
@@ -277,7 +278,7 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
               <PlayerBoard
                 board={mergedBoard}
                 playerName={`${currentPlayer.displayName} (You)`}
-                fouled={currentPlayer.fouled}
+                fouled={currentPlayer.fouled || isFoul(mergedBoard)}
                 isCurrentPlayer
                 onRowClick={selectedIndex !== null && !submitting ? handleRowClick : undefined}
                 hasCardSelected={selectedIndex !== null && !submitting}
