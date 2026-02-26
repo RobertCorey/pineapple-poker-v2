@@ -30,12 +30,12 @@ test('player can leave mid-match and game continues for remaining player', async
     await placeStreet(alice, street);
   }
 
-  // Round 1 results
+  // Round 1 results — Alice finished solo, round overlay appears
   await alice.getByTestId('round-results').waitFor({ timeout: T_JOIN });
   await expect(alice.getByTestId('round-results')).toContainText('Round 1 of 3 Complete');
 
-  // Overlay auto-dismisses when next phase starts; wait for lobby
-  await alice.getByTestId('start-match-button').waitFor({ timeout: T_PHASE });
+  // Round overlay auto-dismisses when dealer resets for next round
+  await alice.getByTestId('round-results').waitFor({ state: 'hidden', timeout: T_PHASE });
 
   await cleanup();
 });
