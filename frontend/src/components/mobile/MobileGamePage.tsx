@@ -157,21 +157,22 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
     return () => clearTimeout(t);
   }, [autoPlaceToast]);
 
-  // Countdown progress bar percentage (1.0 = full, 0.0 = depleted)
+  // Countdown progress bar: store computed percentage in state, updated by interval
   const [progressPct, setProgressPct] = useState(1);
   useEffect(() => {
     if (!isPlacementPhase || !gameState.phaseDeadline || !gameState.settings?.turnTimeoutMs) {
-      setProgressPct(1);
       return;
     }
     const totalMs = gameState.settings.turnTimeoutMs;
-    const update = () => {
-      const remainMs = Math.max(0, gameState.phaseDeadline! - Date.now());
+    const deadline = gameState.phaseDeadline;
+    const interval = setInterval(() => {
+      const remainMs = Math.max(0, deadline - Date.now());
       setProgressPct(remainMs / totalMs);
+    }, 100);
+    return () => {
+      clearInterval(interval);
+      setProgressPct(1);
     };
-    update();
-    const interval = setInterval(update, 100);
-    return () => clearInterval(interval);
   }, [isPlacementPhase, gameState.phaseDeadline, gameState.settings?.turnTimeoutMs]);
 
   const placedCardKeys = new Set(placements.map((p) => cardKey(p.card)));
