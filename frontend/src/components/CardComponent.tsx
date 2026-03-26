@@ -1,7 +1,7 @@
 import type { Card } from '@shared/core/types';
 import type { CSSProperties } from 'react';
 import { RANK_NAMES } from '@shared/core/constants';
-import { Rank } from '@shared/core/types';
+
 
 /** Four-color deck: each suit gets a distinct background color. */
 const SUIT_BG: Record<string, string> = {
@@ -80,7 +80,6 @@ export function CardComponent({ card, widthPx, selected, onClick }: CardProps) {
   const border = SUIT_BORDER[card.suit];
   const ring = SUIT_SELECTED_RING[card.suit];
   const suitSymbol = SUIT_SYMBOL[card.suit];
-  const isAce = card.rank === Rank.Ace;
 
   return (
     <div
@@ -93,7 +92,7 @@ export function CardComponent({ card, widthPx, selected, onClick }: CardProps) {
       `}
       style={s.card}
     >
-      <span style={{ ...s.rank, ...(isAce ? { color: '#fcd34d' } : {}) }}>{rank}</span>
+      <span style={s.rank}>{rank}</span>
       {widthPx >= 25 && <span style={s.suit}>{suitSymbol}</span>}
     </div>
   );
