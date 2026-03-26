@@ -103,7 +103,7 @@ export const RANK_NAMES: Record<number, string> = {
   [Rank.Seven]: '7',
   [Rank.Eight]: '8',
   [Rank.Nine]: '9',
-  [Rank.Ten]: 'T',
+  [Rank.Ten]: '10',
   [Rank.Jack]: 'J',
   [Rank.Queen]: 'Q',
   [Rank.King]: 'K',
