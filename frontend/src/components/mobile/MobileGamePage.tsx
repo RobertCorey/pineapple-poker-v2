@@ -135,14 +135,44 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
 
   const showRoundOverlay = isRoundComplete && !isMatchComplete;
 
-  // Reset placement state when phase changes
+  // Auto-place toast: detect when phase changes away from placement and player had unsubmitted cards
   const [prevPhase, setPrevPhase] = useState(gameState.phase);
+  const [autoPlaceToast, setAutoPlaceToast] = useState<string | null>(null);
+  const prevWasPlacement = prevPhase === GamePhase.InitialDeal || STREET_PHASES.has(prevPhase);
   if (prevPhase !== gameState.phase) {
+    // Show toast if player had unsubmitted placements or unplaced hand cards during a placement phase
+    if (prevWasPlacement && !submitting && hand.length > 0) {
+      setAutoPlaceToast("Time's up! Cards placed automatically.");
+    }
     setPrevPhase(gameState.phase);
     setPlacements([]);
     setSelectedIndex(null);
     setSubmitting(false);
   }
+
+  // Auto-dismiss the auto-place toast after 4 seconds
+  useEffect(() => {
+    if (!autoPlaceToast) return;
+    const t = setTimeout(() => setAutoPlaceToast(null), 4000);
+    return () => clearTimeout(t);
+  }, [autoPlaceToast]);
+
+  // Countdown progress bar percentage (1.0 = full, 0.0 = depleted)
+  const [progressPct, setProgressPct] = useState(1);
+  useEffect(() => {
+    if (!isPlacementPhase || !gameState.phaseDeadline || !gameState.settings?.turnTimeoutMs) {
+      setProgressPct(1);
+      return;
+    }
+    const totalMs = gameState.settings.turnTimeoutMs;
+    const update = () => {
+      const remainMs = Math.max(0, gameState.phaseDeadline! - Date.now());
+      setProgressPct(remainMs / totalMs);
+    };
+    update();
+    const interval = setInterval(update, 100);
+    return () => clearInterval(interval);
+  }, [isPlacementPhase, gameState.phaseDeadline, gameState.settings?.turnTimeoutMs]);
 
   const placedCardKeys = new Set(placements.map((p) => cardKey(p.card)));
   const remainingHand = hand.filter((c) => !placedCardKeys.has(cardKey(c)));
@@ -234,13 +264,13 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
 
   return (
     <div className="h-full bg-black flex justify-center">
-    <div className="w-full max-w-[430px] bg-gray-900 text-white font-mono flex flex-col overflow-hidden">
+    <div className={`w-full max-w-[430px] bg-gray-900 text-white font-mono flex flex-col overflow-hidden ${countdown <= 3 && countdown > 0 && isPlacementPhase ? 'ring-2 ring-red-500/60' : ''}`}>
       {/* Compact mobile header */}
       <div className="border-b border-gray-700 px-2 py-1.5 flex items-center justify-between text-[10px] flex-shrink-0">
         <div className="flex items-center gap-2">
           <span className="text-green-400 font-bold tracking-wider">{roomId}</span>
           {showTimer && (
-            <span className={`font-bold ${countdown < 10 ? 'text-red-400' : 'text-yellow-400'}`}>
+            <span className={`font-bold ${countdown < 10 ? 'text-red-400' : 'text-yellow-400'} ${countdown <= 5 && countdown > 0 ? 'animate-pulse' : ''}`}>
               {countdown}s
             </span>
           )}
@@ -265,6 +295,18 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
           </button>
         </div>
       </div>
+
+      {/* Countdown progress bar */}
+      {isPlacementPhase && (
+        <div className="w-full h-1.5 bg-gray-800 flex-shrink-0">
+          <div
+            className={`h-full transition-all duration-100 ease-linear ${
+              progressPct > 0.5 ? 'bg-green-500' : progressPct > 0.25 ? 'bg-yellow-500' : 'bg-red-500'
+            }`}
+            style={{ width: `${(progressPct * 100).toFixed(1)}%` }}
+          />
+        </div>
+      )}
 
       {/* Observer banner */}
       {isObserver && (
@@ -330,6 +372,13 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
       )}
 
       <Toast message={toast} />
+
+      {/* Auto-place toast */}
+      {autoPlaceToast && (
+        <div className="fixed top-8 left-1/2 -translate-x-1/2 bg-black/80 border border-yellow-600 px-4 py-2 text-xs text-white shadow-lg z-50 rounded animate-fade-in">
+          {autoPlaceToast}
+        </div>
+      )}
     </div>
     </div>
   );
