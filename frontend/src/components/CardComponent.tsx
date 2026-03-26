@@ -2,6 +2,7 @@ import type { Card } from '@shared/core/types';
 import type { CSSProperties } from 'react';
 import { RANK_NAMES } from '@shared/core/constants';
 
+
 /** Four-color deck: each suit gets a distinct background color. */
 const SUIT_BG: Record<string, string> = {
   s: 'bg-gray-900',   // spades — black
@@ -24,6 +25,14 @@ const SUIT_SELECTED_RING: Record<string, string> = {
   c: 'ring-green-300',
 };
 
+/** Unicode suit symbols for card display. */
+const SUIT_SYMBOL: Record<string, string> = {
+  s: '\u2660',  // ♠
+  h: '\u2665',  // ♥
+  d: '\u2666',  // ♦
+  c: '\u2663',  // ♣
+};
+
 export const CARD_ASPECT = 1.4;
 
 interface CardProps {
@@ -33,7 +42,8 @@ interface CardProps {
   onClick?: () => void;
 }
 
-function cardStyles(w: number) {
+function cardStyles(w: number, rankLen: number) {
+  const rankFontSize = rankLen > 1 ? w * 0.35 : w * 0.45;
   return {
     card: {
       width: w,
@@ -41,16 +51,19 @@ function cardStyles(w: number) {
       borderRadius: Math.max(2, Math.round(w * 0.1)),
     } as CSSProperties,
     rank: {
-      fontSize: Math.max(7, Math.round(w * 0.45)),
+      fontSize: Math.max(7, Math.round(rankFontSize)),
+      lineHeight: '1',
+    } as CSSProperties,
+    suit: {
+      fontSize: Math.max(5, Math.round(w * 0.25)),
       lineHeight: '1',
     } as CSSProperties,
   };
 }
 
 export function CardComponent({ card, widthPx, selected, onClick }: CardProps) {
-  const s = cardStyles(widthPx);
-
   if (!card) {
+    const s = cardStyles(widthPx, 1);
     return (
       <div
         className="border-2 border-gray-600 bg-gray-800 flex items-center justify-center cursor-default bg-[repeating-linear-gradient(45deg,transparent,transparent_4px,rgba(255,255,255,0.05)_4px,rgba(255,255,255,0.05)_8px)]"
@@ -62,9 +75,11 @@ export function CardComponent({ card, widthPx, selected, onClick }: CardProps) {
   }
 
   const rank = RANK_NAMES[card.rank];
+  const s = cardStyles(widthPx, rank.length);
   const bg = SUIT_BG[card.suit];
   const border = SUIT_BORDER[card.suit];
   const ring = SUIT_SELECTED_RING[card.suit];
+  const suitSymbol = SUIT_SYMBOL[card.suit];
 
   return (
     <div
@@ -78,6 +93,7 @@ export function CardComponent({ card, widthPx, selected, onClick }: CardProps) {
       style={s.card}
     >
       <span style={s.rank}>{rank}</span>
+      {widthPx >= 25 && <span style={s.suit}>{suitSymbol}</span>}
     </div>
   );
 }
