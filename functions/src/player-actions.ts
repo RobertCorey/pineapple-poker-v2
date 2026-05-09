@@ -525,7 +525,13 @@ export const pickMutation = onCall({ maxInstances: 10 }, async (request) => {
       throw new HttpsError('failed-precondition', 'You already picked a mutation this round.');
     }
     const pick: { id: string; target?: string } = { id: mutationId };
-    if (target) pick.target = target;
+    if (target) {
+      pick.target = target;
+    } else if (mutationId === 'cull') {
+      // Cull: capture random seed at pick time so the cull is the same every
+      // round (otherwise the deck would re-randomize between rounds).
+      pick.target = String(Math.floor(Math.random() * 0xFFFFFFFF) || 1);
+    }
     picks[uid] = pick;
 
     tx.update(gameRef, {

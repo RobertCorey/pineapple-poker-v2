@@ -183,7 +183,7 @@ export const CHARMS: Record<CharmId, CharmDef> = {
     id: 'big_score',
     name: 'Big Score',
     emoji: '💰',
-    description: '+10 every round, no matter what.',
+    description: '+10 every round (skipped if you foul).',
     bonus: () => 10,
   },
   ace_collector: {
@@ -197,7 +197,7 @@ export const CHARMS: Record<CharmId, CharmDef> = {
     id: 'foul_shield',
     name: 'Foul Shield',
     emoji: '🛡️',
-    description: 'Foul penalty reduced by 10 per opponent.',
+    description: 'Foul penalty reduced by 10 per opponent. Fouls become small wins.',
     bonus: () => 0,
     foulShield: 10,
   },
