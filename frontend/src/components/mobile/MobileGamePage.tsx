@@ -7,6 +7,7 @@ import { GamePhase } from '@shared/core/types';
 import { INITIAL_DEAL_COUNT, STREET_PLACE_COUNT } from '@shared/core/constants';
 import { isFoul } from '@shared/game-logic/scoring';
 import { CHARMS } from '@shared/game-logic/charms';
+import { MUTATIONS } from '@shared/game-logic/mutations';
 import { placeCards, leaveGame } from '../../api.ts';
 import { trackEvent } from '../../firebase.ts';
 import { useCountdown } from '../../hooks/useCountdown.ts';
@@ -274,26 +275,49 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
         </div>
       )}
 
-      {/* Run mode: charm strip */}
+      {/* Run mode: charm + mutation strip */}
       {gameState.runMode && (() => {
         const myCharms = gameState.charms?.[uid] ?? [];
-        if (myCharms.length === 0) return null;
+        const myMutations = gameState.mutations?.[uid] ?? [];
+        if (myCharms.length === 0 && myMutations.length === 0) return null;
         return (
           <div className="bg-purple-900/30 border-b border-purple-700 px-2 py-1 flex items-center gap-1 text-[10px] flex-shrink-0 overflow-x-auto">
-            <span className="text-purple-300 uppercase tracking-wider mr-1 flex-shrink-0">Charms:</span>
-            {myCharms.map((cid, i) => {
-              const c = CHARMS[cid];
-              if (!c) return null;
-              return (
-                <span
-                  key={i}
-                  title={`${c.name}: ${c.description}`}
-                  className="flex-shrink-0"
-                >
-                  {c.emoji}
-                </span>
-              );
-            })}
+            {myCharms.length > 0 && (
+              <>
+                <span className="text-purple-300 uppercase tracking-wider mr-1 flex-shrink-0">Charms:</span>
+                {myCharms.map((cid, i) => {
+                  const c = CHARMS[cid];
+                  if (!c) return null;
+                  return (
+                    <span
+                      key={`c${i}`}
+                      title={`${c.name}: ${c.description}`}
+                      className="flex-shrink-0"
+                    >
+                      {c.emoji}
+                    </span>
+                  );
+                })}
+              </>
+            )}
+            {myMutations.length > 0 && (
+              <>
+                <span className="text-amber-300 uppercase tracking-wider ml-2 mr-1 flex-shrink-0">Deck:</span>
+                {myMutations.map((m, i) => {
+                  const def = MUTATIONS[m.id];
+                  if (!def) return null;
+                  return (
+                    <span
+                      key={`m${i}`}
+                      title={`${def.name}: ${def.description}${m.target ? ` (${m.target})` : ''}`}
+                      className="flex-shrink-0"
+                    >
+                      {def.emoji}
+                    </span>
+                  );
+                })}
+              </>
+            )}
           </div>
         );
       })()}

@@ -132,6 +132,7 @@ function App() {
         gameState={gameState}
         uid={user.uid}
         roomId={roomId}
+        onLeaveRoom={handleLeaveRoom}
       />
     );
   }

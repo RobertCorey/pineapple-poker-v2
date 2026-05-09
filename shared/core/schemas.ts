@@ -102,6 +102,27 @@ export const GameStateSchema = z.object({
   charmOptions: z.array(z.string()).nullable().optional(),
   charmPicks: z.record(z.string(), z.string()).optional(),
   charmBonuses: z.record(z.string(), z.number()).optional(),
+  mutations: z
+    .record(
+      z.string(),
+      z.array(
+        z.object({
+          id: z.string(),
+          target: z.string().optional(),
+        }),
+      ),
+    )
+    .optional(),
+  mutationOptions: z.array(z.string()).nullable().optional(),
+  mutationPicks: z
+    .record(
+      z.string(),
+      z.object({
+        id: z.string(),
+        target: z.string().optional(),
+      }),
+    )
+    .optional(),
 });
 
 // ---- Subcollection documents ----
