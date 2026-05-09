@@ -20,6 +20,22 @@ service cloud.firestore {
       }
     }
 
+    // Kites games: same access pattern as Pineapple games
+    match /kitesGames/{gameId} {
+      allow read: if true;
+      allow write: if false;
+
+      match /hands/{uid} {
+        allow read: if request.auth != null && request.auth.uid == uid;
+        allow write: if false;
+      }
+
+      // Shared draw pile: server-only
+      match /deck/{deckId} {
+        allow read, write: if false;
+      }
+    }
+
     // Deny everything else
     match /{document=**} {
       allow read, write: if false;
