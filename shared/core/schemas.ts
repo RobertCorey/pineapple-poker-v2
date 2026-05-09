@@ -47,6 +47,7 @@ const GAME_PHASE_VALUES = [
   'street_5',
   'scoring',
   'complete',
+  'charm_pick',
   'match_complete',
 ] as const;
 
@@ -95,6 +96,12 @@ export const GameStateSchema = z.object({
   createdAt: z.number(),
   updatedAt: z.number(),
   phaseDeadline: z.number().nullable(),
+  // Run mode (optional — present only for roguelike runs)
+  runMode: z.boolean().optional(),
+  charms: z.record(z.string(), z.array(z.string())).optional(),
+  charmOptions: z.array(z.string()).nullable().optional(),
+  charmPicks: z.record(z.string(), z.string()).optional(),
+  charmBonuses: z.record(z.string(), z.number()).optional(),
 });
 
 // ---- Subcollection documents ----

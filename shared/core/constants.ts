@@ -74,6 +74,9 @@ export const TOTAL_STREETS = 5;
 /** Number of rounds per match. */
 export const ROUNDS_PER_MATCH = 3;
 
+/** Number of rounds per Pineapple Run (roguelike mode). */
+export const ROUNDS_PER_RUN = 5;
+
 /** Default match settings applied when creating a new room */
 import type { MatchSettings } from './types';
 export const DEFAULT_MATCH_SETTINGS: MatchSettings = {

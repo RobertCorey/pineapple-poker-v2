@@ -10,9 +10,11 @@ import {
   TOP_ROW_SIZE,
   FIVE_CARD_ROW_SIZE,
   ROUNDS_PER_MATCH,
+  ROUNDS_PER_RUN,
   MAX_PLAYERS,
   DEFAULT_MATCH_SETTINGS,
 } from '../../shared/core/constants';
+import { CHARMS } from '../../shared/game-logic/charms';
 import { gameDoc, handDoc, deckDoc } from '../../shared/core/firestore-paths';
 import { emptyBoard } from '../../shared/game-logic/board-utils';
 import { parseGameState, CardSchema, MatchSettingsSchema } from '../../shared/core/schemas';
@@ -344,6 +346,7 @@ export const placeCards = onCall({ maxInstances: 10 }, async (request) => {
 
 const StartMatchSchema = RoomIdSchema.extend({
   settings: MatchSettingsSchema.optional(),
+  runMode: z.boolean().optional(),
 });
 
 export const startMatch = onCall({ maxInstances: 10 }, async (request) => {
@@ -356,7 +359,7 @@ export const startMatch = onCall({ maxInstances: 10 }, async (request) => {
   if (!parsed.success) {
     throw new HttpsError('invalid-argument', 'Invalid request data.');
   }
-  const { roomId, settings } = parsed.data;
+  const { roomId, settings, runMode } = parsed.data;
   const gameRef = db().doc(gameDoc(roomId));
 
   await db().runTransaction(async (tx) => {
@@ -381,18 +384,80 @@ export const startMatch = onCall({ maxInstances: 10 }, async (request) => {
       throw new HttpsError('failed-precondition', 'Need at least 2 players to start.');
     }
 
-    if (settings) {
-      tx.update(gameRef, {
-        round: 1,
-        settings,
-        updatedAt: Date.now(),
-      });
-    } else {
-      tx.update(gameRef, {
-        round: 1,
-        updatedAt: Date.now(),
-      });
+    // Use `any` here because Firestore's update typing is strict about
+    // FieldValue | Partial<T>; we're constructing a heterogeneous patch.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const baseUpdate: Record<string, any> = {
+      round: 1,
+      updatedAt: Date.now(),
+    };
+    if (settings) baseUpdate.settings = settings;
+
+    if (runMode) {
+      baseUpdate.runMode = true;
+      baseUpdate.totalRounds = ROUNDS_PER_RUN;
+      // Initialise empty charm collections for each active player
+      const charms: Record<string, string[]> = {};
+      for (const u of game.playerOrder) charms[u] = [];
+      baseUpdate.charms = charms;
     }
+
+    tx.update(gameRef, baseUpdate);
+  });
+
+  return { success: true };
+});
+
+// ---- pickCharm ----
+
+const PickCharmSchema = RoomIdSchema.extend({
+  charmId: z.string().min(1),
+});
+
+export const pickCharm = onCall({ maxInstances: 10 }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError('unauthenticated', 'Must be signed in.');
+  }
+
+  const parsed = PickCharmSchema.safeParse(request.data);
+  if (!parsed.success) {
+    throw new HttpsError('invalid-argument', 'Invalid request data.');
+  }
+  const { roomId, charmId } = parsed.data;
+
+  if (!CHARMS[charmId]) {
+    throw new HttpsError('invalid-argument', 'Unknown charm.');
+  }
+
+  const gameRef = db().doc(gameDoc(roomId));
+
+  await db().runTransaction(async (tx) => {
+    const snap = await tx.get(gameRef);
+    if (!snap.exists) throw new HttpsError('not-found', 'No game exists.');
+
+    const game = parseGameState(snap.data());
+    if (!game.runMode) throw new HttpsError('failed-precondition', 'Not in a run.');
+    if (game.phase !== GP.CharmPick) {
+      throw new HttpsError('failed-precondition', 'Not in charm pick phase.');
+    }
+    if (!game.playerOrder.includes(uid)) {
+      throw new HttpsError('failed-precondition', 'Observers cannot pick charms.');
+    }
+    if (!(game.charmOptions ?? []).includes(charmId)) {
+      throw new HttpsError('invalid-argument', 'Charm is not on offer this pick.');
+    }
+
+    const picks = { ...(game.charmPicks ?? {}) };
+    if (picks[uid]) {
+      throw new HttpsError('failed-precondition', 'You already picked this round.');
+    }
+    picks[uid] = charmId;
+
+    tx.update(gameRef, {
+      charmPicks: picks,
+      updatedAt: Date.now(),
+    });
   });
 
   return { success: true };
@@ -447,6 +512,13 @@ export const playAgain = onCall({ maxInstances: 10 }, async (request) => {
       playerOrder: updatedPlayerOrder,
       roundResults: FieldValue.delete(),
       phaseDeadline: null,
+      // Clear all run-mode state — host must opt back in via Start
+      runMode: FieldValue.delete(),
+      totalRounds: ROUNDS_PER_MATCH,
+      charms: FieldValue.delete(),
+      charmOptions: FieldValue.delete(),
+      charmPicks: FieldValue.delete(),
+      charmBonuses: FieldValue.delete(),
       updatedAt: Date.now(),
     });
   });
