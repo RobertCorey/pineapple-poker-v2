@@ -3,6 +3,7 @@ import * as http from 'http';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Dealer } from './dealer';
+import { KitesDealer } from './kites/kites-dealer';
 import { DEALER_HEALTH_PORT } from '../../shared/core/constants';
 
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
@@ -84,6 +85,7 @@ admin.initializeApp(IS_PRODUCTION ? undefined : { projectId: 'pineapple-poker-8f
 
 const db = admin.firestore();
 const dealer = new Dealer(db);
+const kitesDealer = new KitesDealer(db);
 
 // ── Health HTTP server ──────────────────────────────────────────────────────
 
@@ -101,6 +103,7 @@ const healthServer = http.createServer((req, res) => {
       pid: process.pid,
       uptime: Math.round((Date.now() - startTime) / 1000),
       rooms: dealer.roomCount,
+      kitesRooms: kitesDealer.roomCount,
     }));
   } else {
     res.writeHead(404);
@@ -115,6 +118,7 @@ healthServer.listen(healthPort, healthHost, () => {
 // ── Start dealer ────────────────────────────────────────────────────────────
 
 dealer.start();
+kitesDealer.start();
 console.log(`[Dealer] Running in ${IS_PRODUCTION ? 'PRODUCTION' : 'development'} mode`);
 
 // ── Graceful shutdown ───────────────────────────────────────────────────────
@@ -122,6 +126,7 @@ console.log(`[Dealer] Running in ${IS_PRODUCTION ? 'PRODUCTION' : 'development'}
 function shutdown(): void {
   console.log('\n[Dealer] Shutting down...');
   dealer.stop();
+  kitesDealer.stop();
   healthServer.close();
   if (!IS_PRODUCTION) removeLockfile();
   process.exit(0);

@@ -1,18 +1,18 @@
 import { useState } from 'react';
-import { joinGame } from '../api.ts';
-import { trackEvent } from '../firebase.ts';
-import { useToast } from '../hooks/useToast.ts';
-import { generateRoomCode } from '../utils/roomCode.ts';
-import { Toast } from './Toast.tsx';
+import { kitesJoinGame } from '../../api-kites.ts';
+import { useToast } from '../../hooks/useToast.ts';
+import { generateRoomCode } from '../../utils/roomCode.ts';
+import { Toast } from '../Toast.tsx';
 
-interface RoomSelectorProps {
+interface Props {
   displayName: string;
   setDisplayName: (name: string) => void;
   signIn: () => Promise<void>;
   onRoomJoined: (roomId: string) => void;
+  onSwitchGame?: () => void;
 }
 
-export function RoomSelector({ displayName, setDisplayName, signIn, onRoomJoined }: RoomSelectorProps) {
+export function KitesRoomSelector({ displayName, setDisplayName, signIn, onRoomJoined, onSwitchGame }: Props) {
   const [nameInput, setNameInput] = useState(displayName);
   const [roomCodeInput, setRoomCodeInput] = useState('');
   const [creating, setCreating] = useState(false);
@@ -26,8 +26,7 @@ export function RoomSelector({ displayName, setDisplayName, signIn, onRoomJoined
       setDisplayName(nameInput.trim());
       await signIn();
       const roomId = generateRoomCode();
-      await joinGame({ roomId, displayName: nameInput.trim(), create: true });
-      trackEvent('create_room', { roomId });
+      await kitesJoinGame({ roomId, displayName: nameInput.trim(), create: true });
       onRoomJoined(roomId);
     } catch (err) {
       console.error('Failed to create room:', err);
@@ -44,8 +43,7 @@ export function RoomSelector({ displayName, setDisplayName, signIn, onRoomJoined
       setDisplayName(nameInput.trim());
       await signIn();
       const roomId = roomCodeInput.trim().toUpperCase();
-      await joinGame({ roomId, displayName: nameInput.trim() });
-      trackEvent('join_room', { roomId });
+      await kitesJoinGame({ roomId, displayName: nameInput.trim() });
       onRoomJoined(roomId);
     } catch (err) {
       console.error('Failed to join room:', err);
@@ -56,72 +54,71 @@ export function RoomSelector({ displayName, setDisplayName, signIn, onRoomJoined
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center font-mono">
-      <div className="border border-gray-700 p-6 max-w-sm w-full mx-4">
-        <h1 className="text-xl font-bold text-center mb-1">Pineapple Poker</h1>
-        <p className="text-gray-500 text-center text-xs mb-4">Open Face Chinese</p>
+    <div className="min-h-screen bg-gradient-to-b from-sky-900 to-sky-950 text-white flex items-center justify-center font-sans">
+      <div className="border border-sky-700/60 bg-sky-950/80 backdrop-blur p-6 rounded-lg max-w-sm w-full mx-4 shadow-2xl shadow-sky-500/10">
+        <h1 className="text-3xl font-bold text-center mb-1 tracking-wide">Kites</h1>
+        <p className="text-sky-300 text-center text-xs mb-5">Cooperative · Real-time · 2–6 pilots</p>
 
         <div className="space-y-3">
           <div>
-            <label htmlFor="name" className="block text-xs text-gray-500 mb-1">
+            <label htmlFor="kites-name" className="block text-xs text-sky-400 mb-1">
               Display Name
             </label>
             <input
-              id="name"
-              data-testid="name-input"
+              id="kites-name"
               type="text"
               value={nameInput}
               onChange={(e) => setNameInput(e.target.value)}
-              placeholder="Enter your name"
+              placeholder="Pilot name"
               maxLength={20}
-              className="w-full px-3 py-2 bg-gray-800 border border-gray-600 text-white placeholder-gray-500 focus:outline-none focus:border-green-500 text-sm"
+              className="w-full px-3 py-2 bg-sky-900/50 border border-sky-700 text-white placeholder-sky-600 focus:outline-none focus:border-cyan-400 text-sm rounded"
             />
           </div>
 
           <button
-            data-testid="create-room-button"
             onClick={handleCreate}
             disabled={!nameInput.trim() || creating}
-            className="w-full py-2 bg-green-700 hover:bg-green-600 disabled:bg-gray-700 disabled:text-gray-500 text-white text-sm font-bold"
+            className="w-full py-2 bg-cyan-600 hover:bg-cyan-500 disabled:bg-gray-700 disabled:text-gray-500 text-white text-sm font-bold rounded"
           >
             {creating ? 'Creating...' : 'Create Room'}
           </button>
 
-          <div className="flex items-center gap-2 text-gray-600 text-xs">
-            <div className="flex-1 border-t border-gray-700" />
+          <div className="flex items-center gap-2 text-sky-600 text-xs">
+            <div className="flex-1 border-t border-sky-800" />
             or join
-            <div className="flex-1 border-t border-gray-700" />
+            <div className="flex-1 border-t border-sky-800" />
           </div>
 
           <div className="flex gap-2">
             <input
-              data-testid="room-code-input"
               type="text"
               value={roomCodeInput}
               onChange={(e) => setRoomCodeInput(e.target.value.toUpperCase())}
               onKeyDown={(e) => e.key === 'Enter' && handleJoin()}
               placeholder="Room code"
               maxLength={6}
-              className="flex-1 px-3 py-2 bg-gray-800 border border-gray-600 text-white placeholder-gray-500 focus:outline-none focus:border-green-500 text-sm uppercase tracking-widest"
+              className="flex-1 px-3 py-2 bg-sky-900/50 border border-sky-700 text-white placeholder-sky-600 focus:outline-none focus:border-cyan-400 text-sm uppercase tracking-widest rounded"
             />
             <button
-              data-testid="join-room-button"
               onClick={handleJoin}
               disabled={!nameInput.trim() || !roomCodeInput.trim() || joining}
-              className="px-4 py-2 bg-blue-700 hover:bg-blue-600 disabled:bg-gray-700 disabled:text-gray-500 text-white text-sm font-bold"
+              className="px-4 py-2 bg-sky-700 hover:bg-sky-600 disabled:bg-gray-700 disabled:text-gray-500 text-white text-sm font-bold rounded"
             >
               {joining ? '...' : 'Join'}
             </button>
           </div>
         </div>
-        <div className="mt-4 pt-3 border-t border-gray-700 flex justify-center">
-          <a
-            href="?game=kites"
-            className="text-xs text-cyan-400 hover:text-cyan-300"
-          >
-            Try Kites (cooperative) →
-          </a>
-        </div>
+
+        {onSwitchGame && (
+          <div className="mt-4 pt-3 border-t border-sky-800 flex justify-center">
+            <button
+              onClick={onSwitchGame}
+              className="text-xs text-sky-400 hover:text-sky-200"
+            >
+              ← Switch to Pineapple Poker
+            </button>
+          </div>
+        )}
       </div>
       <Toast message={toast} />
     </div>
