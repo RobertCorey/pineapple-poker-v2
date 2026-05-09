@@ -12,7 +12,6 @@ import { placeCards, leaveGame } from '../../api.ts';
 import { trackEvent } from '../../firebase.ts';
 import { useCountdown } from '../../hooks/useCountdown.ts';
 import { useToast } from '../../hooks/useToast.ts';
-import { cardKey } from '../../utils/card-utils.ts';
 import type { Placement } from '../../utils/card-utils.ts';
 import { PlayerBoard } from '../PlayerBoard.tsx';
 import { Toast } from '../Toast.tsx';
@@ -146,22 +145,30 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
     setSubmitting(false);
   }
 
-  const placedCardKeys = new Set(placements.map((p) => cardKey(p.card)));
-  const remainingHand = hand.filter((c) => !placedCardKeys.has(cardKey(c)));
+  // Track placements by their stable hand index, NOT by card identity. Run-mode
+  // mutations (Pair Party, Mono Suit, Spike, Royal Inflation, Ace Rush) can
+  // produce hands with duplicate (rank, suit) cards — using cardKey for
+  // identity collides duplicates and breaks React keys + state.
+  const placedHandIndices = new Set(placements.map((p) => p.handIndex));
+  const availableHand = hand
+    .map((card, handIndex) => ({ card, handIndex }))
+    .filter(({ handIndex }) => !placedHandIndices.has(handIndex));
 
+  const player = gameState.players[uid];
+  // Only merge optimistic placements onto the board while the server still
+  // shows cards in our hand. Once the server has accepted the placeCards call,
+  // currentHand becomes empty and player.board contains the placements — at
+  // that point merging would double-count duplicate cards.
+  const showOptimisticPlacements = !!player && (player.currentHand?.length ?? 0) > 0;
   const mergedBoard = ((): Board => {
-    const player = gameState.players[uid];
     if (!player) return { top: [], middle: [], bottom: [] };
     const board: Board = {
       top: [...player.board.top],
       middle: [...player.board.middle],
       bottom: [...player.board.bottom],
     };
-    for (const p of placements) {
-      const alreadyOnBoard = board[p.row].some(
-        (c) => c.rank === p.card.rank && c.suit === p.card.suit
-      );
-      if (!alreadyOnBoard) {
+    if (showOptimisticPlacements) {
+      for (const p of placements) {
         board[p.row] = [...board[p.row], p.card];
       }
     }
@@ -170,14 +177,18 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
 
   const handleRowClick = async (row: Row) => {
     if (selectedIndex === null || submitting) return;
-    const card = remainingHand[selectedIndex];
-    if (!card) return;
+    // selectedIndex is a position into `availableHand`
+    const selected = availableHand[selectedIndex];
+    if (!selected) return;
 
     const currentRowSize = mergedBoard[row].length;
     const maxSize = row === 'top' ? 3 : 5;
     if (currentRowSize >= maxSize) return;
 
-    const newPlacements = [...placements, { card, row }];
+    const newPlacements = [
+      ...placements,
+      { card: selected.card, row, handIndex: selected.handIndex },
+    ];
     setPlacements(newPlacements);
     SoundEngine.get().playCardPlace();
     setSelectedIndex(null);
@@ -190,10 +201,15 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
           row: p.row,
         }));
 
-        const newPlacedKeys = new Set(newPlacements.map((p) => cardKey(p.card)));
-        const discard = isStreet
-          ? hand.find((c) => !newPlacedKeys.has(cardKey(c))) ?? null
+        const placedIdxSet = new Set(newPlacements.map((p) => p.handIndex));
+        // Discard = the one card we didn't place this street, identified by
+        // its hand index so duplicates don't break the lookup.
+        const discardEntry = isStreet
+          ? hand
+              .map((c, idx) => ({ card: c, idx }))
+              .find(({ idx }) => !placedIdxSet.has(idx))
           : null;
+        const discard = discardEntry?.card ?? null;
 
         await placeCards({ roomId, placements: placementData, discard });
         trackEvent('place_cards', { roomId, street: gameState.street });
@@ -350,6 +366,7 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
           {/* Hand area */}
           <MobileHandArea
             hand={hand}
+            availableHand={availableHand}
             gameState={gameState}
             uid={uid}
             selectedIndex={selectedIndex}

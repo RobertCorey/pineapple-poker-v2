@@ -286,20 +286,28 @@ export const placeCards = onCall({ maxInstances: 10 }, async (request) => {
       }
     }
 
-    // Validate all placed/discarded cards are in hand
+    // Validate all placed/discarded cards are in hand. Use multiset semantics
+    // because run-mode mutations (Pair Party, Spike, Mono Suit, etc.) can
+    // produce hands with duplicate (rank, suit) pairs — a simple `some()`
+    // check would let a client claim to play more copies than were dealt.
     const allCards: Card[] = [...placements.map((p) => p.card)];
     if (discard) allCards.push(discard);
 
+    const handCounts = new Map<string, number>();
+    for (const h of player.currentHand) {
+      const k = `${h.rank}-${h.suit}`;
+      handCounts.set(k, (handCounts.get(k) ?? 0) + 1);
+    }
     for (const card of allCards) {
-      const inHand = player.currentHand.some(
-        (h) => h.suit === card.suit && h.rank === card.rank,
-      );
-      if (!inHand) {
+      const k = `${card.rank}-${card.suit}`;
+      const remaining = handCounts.get(k) ?? 0;
+      if (remaining <= 0) {
         throw new HttpsError(
           'invalid-argument',
-          `Card ${card.rank}${card.suit} is not in your hand.`,
+          `Card ${card.rank}${card.suit} is not in your hand (or already used).`,
         );
       }
+      handCounts.set(k, remaining - 1);
     }
 
     // Validate row capacities
