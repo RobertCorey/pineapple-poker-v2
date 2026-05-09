@@ -263,10 +263,13 @@ export async function scoreRound(db: Firestore, roomId: string): Promise<void> {
 
       if (game.runMode) {
         if (ps.fouled) {
-          // Foul shield: refund some of the foul penalty (per opponent)
+          // Foul shield: refund some of the foul penalty per opponent.
+          // Intentionally NOT capped at FOUL_PENALTY — fouling on purpose with
+          // a strong shield is a valid (and funny) strategy. You forfeit all
+          // your other charm bonuses for the round in exchange.
           const shield = foulShieldReduction(ownedCharms);
           if (shield > 0) {
-            net += shield * opponentCount; // each opponent caused -FOUL_PENALTY; refund `shield` of it
+            net += shield * opponentCount;
           }
         } else {
           const board = game.players[ps.uid]?.board;
