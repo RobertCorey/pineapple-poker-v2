@@ -180,7 +180,8 @@ export function Lobby({ uid, displayName, setDisplayName, signIn, gameState, isI
             </div>
             {isHost && runMode && (
               <p className="text-[10px] text-purple-400 mt-2 leading-relaxed">
-                Roguelike mode. 5 rounds. Pick a charm between each round to power up your scoring.
+                Roguelike mode. 5 rounds. Between each round, pick a charm
+                AND a deck mutation that reshape the rest of the run.
               </p>
             )}
           </div>

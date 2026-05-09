@@ -5,8 +5,11 @@ import type {
   Board,
   PlayerState,
   CharmId,
+  MutationId,
+  MutationPick,
+  Suit,
 } from '../../shared/core/types';
-import { GamePhase as GP } from '../../shared/core/types';
+import { GamePhase as GP, Suit as S } from '../../shared/core/types';
 import {
   INITIAL_DEAL_COUNT,
   STREET_DEAL_COUNT,
@@ -17,6 +20,11 @@ import {
 import { createShuffledDeck, dealCards } from '../../shared/game-logic/deck';
 import { scoreAllPlayers, isFoul } from '../../shared/game-logic/scoring';
 import { applyCharmBonuses, foulShieldReduction, rollCharmOptions } from '../../shared/game-logic/charms';
+import {
+  applyMutationsToDeck,
+  rollMutationOptions,
+  MUTATIONS,
+} from '../../shared/game-logic/mutations';
 import { gameDoc, handDoc, deckDoc } from '../../shared/core/firestore-paths';
 import { emptyBoard, phaseForStreet } from '../../shared/game-logic/board-utils';
 import { parseGameState, parseDeckDoc } from '../../shared/core/schemas';
@@ -75,7 +83,21 @@ export async function maybeStartRound(db: Firestore, roomId: string): Promise<bo
     const updatedPlayers: Record<string, PlayerState> = {};
 
     for (const uid of game.playerOrder) {
-      const deck = createShuffledDeck();
+      // In run mode, apply each player's owned mutations to a fresh standard
+      // deck before shuffling. Mutations stack across rounds.
+      let deck = createShuffledDeck();
+      if (game.runMode) {
+        const ownedMutations = game.mutations?.[uid];
+        if (ownedMutations && ownedMutations.length > 0) {
+          deck = applyMutationsToDeck(deck, ownedMutations);
+          // Reshuffle after mutation (mutations may have appended cards or
+          // changed order via filtering).
+          for (let i = deck.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [deck[i], deck[j]] = [deck[j], deck[i]];
+          }
+        }
+      }
       const { dealt, remaining } = dealCards(deck, INITIAL_DEAL_COUNT);
 
       updatedPlayers[uid] = {
@@ -287,13 +309,39 @@ export async function scoreRound(db: Firestore, roomId: string): Promise<void> {
     if (game.runMode && !isFinalRound) {
       // Roll 3 charm options. Players will pick from the same shared options.
       // Exclude charms ANY player already owns to keep variety.
-      const allOwned = new Set<CharmId>();
+      const allOwnedCharms = new Set<CharmId>();
       if (game.charms) {
         for (const ids of Object.values(game.charms)) {
-          for (const id of ids) allOwned.add(id);
+          for (const id of ids) allOwnedCharms.add(id);
         }
       }
-      const charmOptions = rollCharmOptions(3, allOwned);
+      const charmOptions = rollCharmOptions(3, allOwnedCharms);
+
+      // Roll 3 mutation options. We exclude mutations ANY player already owns
+      // so each player isn't offered the same mutation twice. Use the smallest
+      // current deck size across players as the shrink-budget heuristic.
+      const allOwnedMutations = new Set<MutationId>();
+      if (game.mutations) {
+        for (const picks of Object.values(game.mutations)) {
+          for (const p of picks) allOwnedMutations.add(p.id);
+        }
+      }
+      // Approximate each player's current deck size by stacking mutation
+      // approxDeckSize ratios. We use the minimum so we don't offer a
+      // shrink-mutation that would crash the smallest deck.
+      let smallestDeckSize = 52;
+      if (game.mutations) {
+        for (const picks of Object.values(game.mutations)) {
+          let size = 52;
+          for (const pick of picks) {
+            const def = MUTATIONS[pick.id];
+            if (!def) continue;
+            size = Math.round(size * (def.approxDeckSize / 52));
+          }
+          if (size < smallestDeckSize) smallestDeckSize = size;
+        }
+      }
+      const mutationOptions = rollMutationOptions(3, allOwnedMutations, smallestDeckSize);
 
       tx.update(gameRef, {
         phase: GP.CharmPick,
@@ -302,6 +350,8 @@ export async function scoreRound(db: Firestore, roomId: string): Promise<void> {
         charmBonuses,
         charmOptions,
         charmPicks: {},
+        mutationOptions,
+        mutationPicks: {},
         phaseDeadline: null, // no timer — wait for both picks
         updatedAt: Date.now(),
       });
@@ -320,7 +370,8 @@ export async function scoreRound(db: Firestore, roomId: string): Promise<void> {
 }
 
 /**
- * Auto-pick a charm for a bot. Picks a random option from the available ones.
+ * Auto-pick a charm + mutation for a bot. Each bot picks a random option from
+ * each set of available options. Returns true if anything was written.
  */
 export async function botPickCharm(db: Firestore, roomId: string, botUid: string): Promise<boolean> {
   const gameRef = db.doc(gameDoc(roomId));
@@ -333,19 +384,40 @@ export async function botPickCharm(db: Firestore, roomId: string, botUid: string
     if (game.phase !== GP.CharmPick) return false;
     if (!game.runMode) return false;
 
-    const options = game.charmOptions ?? [];
-    if (options.length === 0) return false;
-
     const player = game.players[botUid];
     if (!player?.isBot) return false;
 
-    const picks = { ...(game.charmPicks ?? {}) };
-    if (picks[botUid]) return false; // already picked
+    const charmOptions = game.charmOptions ?? [];
+    const mutationOptions = game.mutationOptions ?? [];
 
-    picks[botUid] = options[Math.floor(Math.random() * options.length)];
+    const charmPicks = { ...(game.charmPicks ?? {}) };
+    const mutationPicks = { ...(game.mutationPicks ?? {}) };
+
+    let changed = false;
+
+    if (!charmPicks[botUid] && charmOptions.length > 0) {
+      charmPicks[botUid] = charmOptions[Math.floor(Math.random() * charmOptions.length)];
+      changed = true;
+    }
+
+    if (!mutationPicks[botUid] && mutationOptions.length > 0) {
+      const id = mutationOptions[Math.floor(Math.random() * mutationOptions.length)];
+      const def = MUTATIONS[id];
+      const pick: MutationPick = { id };
+      // Suit-targeted mutations: bot picks a random suit
+      if (def?.requiresTarget === 'suit') {
+        const suits: Suit[] = [S.Spades, S.Hearts, S.Diamonds, S.Clubs];
+        pick.target = suits[Math.floor(Math.random() * suits.length)];
+      }
+      mutationPicks[botUid] = pick;
+      changed = true;
+    }
+
+    if (!changed) return false;
 
     tx.update(gameRef, {
-      charmPicks: picks,
+      charmPicks,
+      mutationPicks,
       updatedAt: Date.now(),
     });
     return true;
@@ -367,19 +439,33 @@ export async function processCharmPicks(db: Firestore, roomId: string): Promise<
     if (game.phase !== GP.CharmPick) return false;
     if (!game.runMode) return false;
 
-    // Wait until ALL active players have picked (bots are picked by botPickCharm)
-    const picks = game.charmPicks ?? {};
-    const allPicked = game.playerOrder.every((uid) => picks[uid] != null);
+    // Wait until ALL active players have picked BOTH a charm and a mutation
+    // (bots are picked by botPickCharm)
+    const charmPicks = game.charmPicks ?? {};
+    const mutationPicks = game.mutationPicks ?? {};
+    const allPicked = game.playerOrder.every(
+      (uid) => charmPicks[uid] != null && mutationPicks[uid] != null,
+    );
     if (!allPicked) return false;
 
-    // Apply picks → add charm to each player's owned charm list
+    // Apply charm picks → add charm to each player's owned charm list
     const charms: Record<string, CharmId[]> = { ...(game.charms ?? {}) };
     for (const uid of game.playerOrder) {
-      const picked = picks[uid];
+      const picked = charmPicks[uid];
       if (!picked) continue;
       const owned = charms[uid] ? [...charms[uid]] : [];
       owned.push(picked);
       charms[uid] = owned;
+    }
+
+    // Apply mutation picks → append to each player's owned mutations list
+    const mutations: Record<string, MutationPick[]> = { ...(game.mutations ?? {}) };
+    for (const uid of game.playerOrder) {
+      const picked = mutationPicks[uid];
+      if (!picked) continue;
+      const owned = mutations[uid] ? [...mutations[uid]] : [];
+      owned.push(picked);
+      mutations[uid] = owned;
     }
 
     // Reset boards/hands for next round (mirrors resetForNextRound logic)
@@ -412,6 +498,9 @@ export async function processCharmPicks(db: Firestore, roomId: string): Promise<
       charmOptions: null,
       charmPicks: FieldValue.delete(),
       charmBonuses: FieldValue.delete(),
+      mutations,
+      mutationOptions: null,
+      mutationPicks: FieldValue.delete(),
       roundResults: FieldValue.delete(),
       phaseDeadline: null,
       updatedAt: Date.now(),

@@ -15,6 +15,7 @@ import {
   DEFAULT_MATCH_SETTINGS,
 } from '../../shared/core/constants';
 import { CHARMS } from '../../shared/game-logic/charms';
+import { MUTATIONS } from '../../shared/game-logic/mutations';
 import { gameDoc, handDoc, deckDoc } from '../../shared/core/firestore-paths';
 import { emptyBoard } from '../../shared/game-logic/board-utils';
 import { parseGameState, CardSchema, MatchSettingsSchema } from '../../shared/core/schemas';
@@ -396,10 +397,15 @@ export const startMatch = onCall({ maxInstances: 10 }, async (request) => {
     if (runMode) {
       baseUpdate.runMode = true;
       baseUpdate.totalRounds = ROUNDS_PER_RUN;
-      // Initialise empty charm collections for each active player
+      // Initialise empty charm + mutation collections for each active player
       const charms: Record<string, string[]> = {};
-      for (const u of game.playerOrder) charms[u] = [];
+      const mutations: Record<string, unknown[]> = {};
+      for (const u of game.playerOrder) {
+        charms[u] = [];
+        mutations[u] = [];
+      }
       baseUpdate.charms = charms;
+      baseUpdate.mutations = mutations;
     }
 
     tx.update(gameRef, baseUpdate);
@@ -450,12 +456,72 @@ export const pickCharm = onCall({ maxInstances: 10 }, async (request) => {
 
     const picks = { ...(game.charmPicks ?? {}) };
     if (picks[uid]) {
-      throw new HttpsError('failed-precondition', 'You already picked this round.');
+      throw new HttpsError('failed-precondition', 'You already picked a charm this round.');
     }
     picks[uid] = charmId;
 
     tx.update(gameRef, {
       charmPicks: picks,
+      updatedAt: Date.now(),
+    });
+  });
+
+  return { success: true };
+});
+
+// ---- pickMutation ----
+
+const PickMutationSchema = RoomIdSchema.extend({
+  mutationId: z.string().min(1),
+  target: z.enum(['c', 'd', 'h', 's']).optional(),
+});
+
+export const pickMutation = onCall({ maxInstances: 10 }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError('unauthenticated', 'Must be signed in.');
+  }
+
+  const parsed = PickMutationSchema.safeParse(request.data);
+  if (!parsed.success) {
+    throw new HttpsError('invalid-argument', 'Invalid request data.');
+  }
+  const { roomId, mutationId, target } = parsed.data;
+
+  const def = MUTATIONS[mutationId];
+  if (!def) throw new HttpsError('invalid-argument', 'Unknown mutation.');
+  if (def.requiresTarget === 'suit' && !target) {
+    throw new HttpsError('invalid-argument', 'This mutation requires a suit target.');
+  }
+
+  const gameRef = db().doc(gameDoc(roomId));
+
+  await db().runTransaction(async (tx) => {
+    const snap = await tx.get(gameRef);
+    if (!snap.exists) throw new HttpsError('not-found', 'No game exists.');
+
+    const game = parseGameState(snap.data());
+    if (!game.runMode) throw new HttpsError('failed-precondition', 'Not in a run.');
+    if (game.phase !== GP.CharmPick) {
+      throw new HttpsError('failed-precondition', 'Not in pick phase.');
+    }
+    if (!game.playerOrder.includes(uid)) {
+      throw new HttpsError('failed-precondition', 'Observers cannot pick mutations.');
+    }
+    if (!(game.mutationOptions ?? []).includes(mutationId)) {
+      throw new HttpsError('invalid-argument', 'Mutation is not on offer this pick.');
+    }
+
+    const picks = { ...(game.mutationPicks ?? {}) };
+    if (picks[uid]) {
+      throw new HttpsError('failed-precondition', 'You already picked a mutation this round.');
+    }
+    const pick: { id: string; target?: string } = { id: mutationId };
+    if (target) pick.target = target;
+    picks[uid] = pick;
+
+    tx.update(gameRef, {
+      mutationPicks: picks,
       updatedAt: Date.now(),
     });
   });
@@ -519,6 +585,9 @@ export const playAgain = onCall({ maxInstances: 10 }, async (request) => {
       charmOptions: FieldValue.delete(),
       charmPicks: FieldValue.delete(),
       charmBonuses: FieldValue.delete(),
+      mutations: FieldValue.delete(),
+      mutationOptions: FieldValue.delete(),
+      mutationPicks: FieldValue.delete(),
       updatedAt: Date.now(),
     });
   });

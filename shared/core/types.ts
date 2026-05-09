@@ -129,6 +129,15 @@ export interface MatchSettings {
 /** Charm = roguelike modifier picked between rounds in run mode. */
 export type CharmId = string;
 
+/** Deck mutation = run-defining permanent change to a player's deck. */
+export type MutationId = string;
+
+/** A picked mutation, optionally with a sub-target (suit, rank, etc.). */
+export interface MutationPick {
+  id: MutationId;
+  target?: string; // e.g. a suit code 'h'/'d'/'s'/'c' for suit-targeted mutations
+}
+
 export interface GameState {
   gameId: string;
   phase: GamePhase;
@@ -149,6 +158,10 @@ export interface GameState {
   charmOptions?: CharmId[] | null;           // 3 charms offered this pick (shared)
   charmPicks?: Record<string, CharmId>;      // who picked which charm this pick
   charmBonuses?: Record<string, number>;     // last round's charm bonus per uid
+  // ---- Deck mutations (paired with charm picks) ----
+  mutations?: Record<string, MutationPick[]>;     // each player's owned mutations (in pick order)
+  mutationOptions?: MutationId[] | null;          // 3 mutation ids offered this pick (shared)
+  mutationPicks?: Record<string, MutationPick>;   // who picked which mutation this pick
 }
 
 // ---- Scoring types ----
