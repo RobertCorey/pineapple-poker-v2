@@ -8,6 +8,7 @@ export const startMatch = httpsCallable(functions, 'startMatch');
 export const playAgain = httpsCallable(functions, 'playAgain');
 export const addBot = httpsCallable(functions, 'addBot');
 export const removeBot = httpsCallable(functions, 'removeBot');
+export const pickCharm = httpsCallable(functions, 'pickCharm');
 export const adminDeleteRoom = httpsCallable(functions, 'adminDeleteRoom');
 export const adminKickPlayer = httpsCallable(functions, 'adminKickPlayer');
 export const adminKillAllGames = httpsCallable(functions, 'adminKillAllGames');

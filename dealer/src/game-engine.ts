@@ -4,6 +4,7 @@ import type {
   Card,
   Board,
   PlayerState,
+  CharmId,
 } from '../../shared/core/types';
 import { GamePhase as GP } from '../../shared/core/types';
 import {
@@ -15,6 +16,7 @@ import {
 } from '../../shared/core/constants';
 import { createShuffledDeck, dealCards } from '../../shared/game-logic/deck';
 import { scoreAllPlayers, isFoul } from '../../shared/game-logic/scoring';
+import { applyCharmBonuses, foulShieldReduction, rollCharmOptions } from '../../shared/game-logic/charms';
 import { gameDoc, handDoc, deckDoc } from '../../shared/core/firestore-paths';
 import { emptyBoard, phaseForStreet } from '../../shared/game-logic/board-utils';
 import { parseGameState, parseDeckDoc } from '../../shared/core/schemas';
@@ -227,11 +229,39 @@ export async function scoreRound(db: Firestore, roomId: string): Promise<void> {
 
     const result = scoreAllPlayers(boards, fouls);
 
+    // ---- Apply run-mode adjustments: foul shield + charm bonuses ----
+    const opponentCount = Math.max(0, game.playerOrder.length - 1);
+    const charmBonuses: Record<string, number> = {};
+    const adjustedNetScores: Record<string, number> = {};
+
+    for (const ps of result.players) {
+      let net = ps.netScore;
+      let charmBonus = 0;
+      const ownedCharms: CharmId[] | undefined = game.charms?.[ps.uid];
+
+      if (game.runMode) {
+        if (ps.fouled) {
+          // Foul shield: refund some of the foul penalty (per opponent)
+          const shield = foulShieldReduction(ownedCharms);
+          if (shield > 0) {
+            net += shield * opponentCount; // each opponent caused -FOUL_PENALTY; refund `shield` of it
+          }
+        } else {
+          const board = game.players[ps.uid]?.board;
+          if (board) charmBonus = applyCharmBonuses(ownedCharms, board);
+          net += charmBonus;
+        }
+      }
+
+      charmBonuses[ps.uid] = charmBonus;
+      adjustedNetScores[ps.uid] = net;
+    }
+
     // Build results map and accumulate scores
     const roundResults: Record<string, { netScore: number; fouled: boolean }> = {};
     for (const ps of result.players) {
       roundResults[ps.uid] = {
-        netScore: ps.netScore,
+        netScore: adjustedNetScores[ps.uid],
         fouled: ps.fouled,
       };
     }
@@ -253,13 +283,141 @@ export async function scoreRound(db: Firestore, roomId: string): Promise<void> {
 
     const isFinalRound = game.round >= game.totalRounds;
 
+    // ---- Phase transition: in run mode, go to CharmPick between rounds ----
+    if (game.runMode && !isFinalRound) {
+      // Roll 3 charm options. Players will pick from the same shared options.
+      // Exclude charms ANY player already owns to keep variety.
+      const allOwned = new Set<CharmId>();
+      if (game.charms) {
+        for (const ids of Object.values(game.charms)) {
+          for (const id of ids) allOwned.add(id);
+        }
+      }
+      const charmOptions = rollCharmOptions(3, allOwned);
+
+      tx.update(gameRef, {
+        phase: GP.CharmPick,
+        roundResults,
+        players: updatedPlayers,
+        charmBonuses,
+        charmOptions,
+        charmPicks: {},
+        phaseDeadline: null, // no timer — wait for both picks
+        updatedAt: Date.now(),
+      });
+      return;
+    }
+
     tx.update(gameRef, {
       phase: isFinalRound ? GP.MatchComplete : GP.Complete,
       roundResults,
       players: updatedPlayers,
+      charmBonuses: game.runMode ? charmBonuses : FieldValue.delete(),
       phaseDeadline: isFinalRound ? null : Date.now() + game.settings.interRoundDelayMs,
       updatedAt: Date.now(),
     });
+  });
+}
+
+/**
+ * Auto-pick a charm for a bot. Picks a random option from the available ones.
+ */
+export async function botPickCharm(db: Firestore, roomId: string, botUid: string): Promise<boolean> {
+  const gameRef = db.doc(gameDoc(roomId));
+
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(gameRef);
+    if (!snap.exists) return false;
+
+    const game = parseGameState(snap.data());
+    if (game.phase !== GP.CharmPick) return false;
+    if (!game.runMode) return false;
+
+    const options = game.charmOptions ?? [];
+    if (options.length === 0) return false;
+
+    const player = game.players[botUid];
+    if (!player?.isBot) return false;
+
+    const picks = { ...(game.charmPicks ?? {}) };
+    if (picks[botUid]) return false; // already picked
+
+    picks[botUid] = options[Math.floor(Math.random() * options.length)];
+
+    tx.update(gameRef, {
+      charmPicks: picks,
+      updatedAt: Date.now(),
+    });
+    return true;
+  });
+}
+
+/**
+ * After all active players have picked a charm, apply picks and advance to
+ * the next round (Lobby → InitialDeal via maybeStartRound).
+ */
+export async function processCharmPicks(db: Firestore, roomId: string): Promise<boolean> {
+  const gameRef = db.doc(gameDoc(roomId));
+
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(gameRef);
+    if (!snap.exists) return false;
+
+    const game = parseGameState(snap.data());
+    if (game.phase !== GP.CharmPick) return false;
+    if (!game.runMode) return false;
+
+    // Wait until ALL active players have picked (bots are picked by botPickCharm)
+    const picks = game.charmPicks ?? {};
+    const allPicked = game.playerOrder.every((uid) => picks[uid] != null);
+    if (!allPicked) return false;
+
+    // Apply picks → add charm to each player's owned charm list
+    const charms: Record<string, CharmId[]> = { ...(game.charms ?? {}) };
+    for (const uid of game.playerOrder) {
+      const picked = picks[uid];
+      if (!picked) continue;
+      const owned = charms[uid] ? [...charms[uid]] : [];
+      owned.push(picked);
+      charms[uid] = owned;
+    }
+
+    // Reset boards/hands for next round (mirrors resetForNextRound logic)
+    const updatedPlayers: Record<string, PlayerState> = {};
+    for (const uid of game.playerOrder) {
+      updatedPlayers[uid] = {
+        ...game.players[uid],
+        board: emptyBoard(),
+        currentHand: [],
+        fouled: false,
+      };
+    }
+    for (const uid of Object.keys(game.players)) {
+      if (!game.playerOrder.includes(uid)) {
+        updatedPlayers[uid] = {
+          ...game.players[uid],
+          board: emptyBoard(),
+          currentHand: [],
+          fouled: false,
+        };
+      }
+    }
+
+    tx.update(gameRef, {
+      phase: GP.Lobby,
+      street: 0,
+      players: updatedPlayers,
+      round: game.round + 1,
+      charms,
+      charmOptions: null,
+      charmPicks: FieldValue.delete(),
+      charmBonuses: FieldValue.delete(),
+      roundResults: FieldValue.delete(),
+      phaseDeadline: null,
+      updatedAt: Date.now(),
+    });
+
+    return true;
   });
 }
 

@@ -35,6 +35,7 @@ export function Lobby({ uid, displayName, setDisplayName, signIn, gameState, isI
     return DEFAULT_MATCH_SETTINGS.turnTimeoutMs;
   };
   const [turnTimeoutMs, setTurnTimeoutMs] = useState<number>(getInitialTimeout);
+  const [runMode, setRunMode] = useState<boolean>(false);
 
   const players = gameState ? Object.values(gameState.players) : [];
   const isHost = gameState?.hostUid === uid;
@@ -63,8 +64,8 @@ export function Lobby({ uid, displayName, setDisplayName, signIn, gameState, isI
         turnTimeoutMs,
         interRoundDelayMs: DEFAULT_MATCH_SETTINGS.interRoundDelayMs,
       };
-      await startMatch({ roomId, settings });
-      trackEvent('start_match', { roomId });
+      await startMatch({ roomId, settings, runMode });
+      trackEvent('start_match', { roomId, runMode: runMode ? 1 : 0 });
     } catch (err) {
       console.error('Failed to start match:', err);
       showToast('Failed to start match');
@@ -139,7 +140,7 @@ export function Lobby({ uid, displayName, setDisplayName, signIn, gameState, isI
           {/* Match settings */}
           <div className="mb-4">
             <div className="text-xs text-gray-500 mb-2">Match Settings</div>
-            <div className="flex items-center justify-between text-xs">
+            <div className="flex items-center justify-between text-xs mb-2">
               <span className="text-gray-400">Turn Timer</span>
               {isHost ? (
                 <select
@@ -159,6 +160,29 @@ export function Lobby({ uid, displayName, setDisplayName, signIn, gameState, isI
                 <span className="text-gray-400">{turnTimeoutMs / 1000}s</span>
               )}
             </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-gray-400">Game Mode</span>
+              {isHost ? (
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <span className={runMode ? 'text-purple-300' : 'text-gray-500'}>
+                    {runMode ? 'Pineapple Run' : 'Classic'}
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={runMode}
+                    onChange={(e) => setRunMode(e.target.checked)}
+                    className="w-4 h-4"
+                  />
+                </label>
+              ) : (
+                <span className="text-gray-400">Classic</span>
+              )}
+            </div>
+            {isHost && runMode && (
+              <p className="text-[10px] text-purple-400 mt-2 leading-relaxed">
+                Roguelike mode. 5 rounds. Pick a charm between each round to power up your scoring.
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">

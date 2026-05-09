@@ -9,6 +9,8 @@ import {
   handlePhaseTimeout,
   checkAndAdvance,
   placeSingleBotCards,
+  processCharmPicks,
+  botPickCharm,
 } from './game-engine';
 
 function isPlacementPhase(phase: string): boolean {
@@ -177,6 +179,29 @@ export class Dealer {
     if (game.phase === GP.Scoring) {
       console.log(`[Dealer] [${roomId}] Scoring round`);
       await scoreRound(this.db, roomId);
+      return;
+    }
+
+    if (game.phase === GP.CharmPick) {
+      // Auto-pick for any bots that haven't picked yet
+      const picks = game.charmPicks ?? {};
+      const botsNeedToPick = game.playerOrder.filter((uid) => {
+        const p = game.players[uid];
+        return p?.isBot && !picks[uid];
+      });
+      for (const botUid of botsNeedToPick) {
+        try {
+          await botPickCharm(this.db, roomId, botUid);
+        } catch (err) {
+          console.error(`[Dealer] [${roomId}] Bot charm pick error:`, err);
+        }
+      }
+
+      // After picks (or if all already picked), try to advance
+      const advanced = await processCharmPicks(this.db, roomId);
+      if (advanced) {
+        await maybeStartRound(this.db, roomId);
+      }
       return;
     }
 

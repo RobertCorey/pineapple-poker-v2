@@ -6,6 +6,7 @@ import type { Card, Row, Board } from '@shared/core/types';
 import { GamePhase } from '@shared/core/types';
 import { INITIAL_DEAL_COUNT, STREET_PLACE_COUNT } from '@shared/core/constants';
 import { isFoul } from '@shared/game-logic/scoring';
+import { CHARMS } from '@shared/game-logic/charms';
 import { placeCards, leaveGame } from '../../api.ts';
 import { trackEvent } from '../../firebase.ts';
 import { useCountdown } from '../../hooks/useCountdown.ts';
@@ -272,6 +273,30 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
           Observing — join next match
         </div>
       )}
+
+      {/* Run mode: charm strip */}
+      {gameState.runMode && (() => {
+        const myCharms = gameState.charms?.[uid] ?? [];
+        if (myCharms.length === 0) return null;
+        return (
+          <div className="bg-purple-900/30 border-b border-purple-700 px-2 py-1 flex items-center gap-1 text-[10px] flex-shrink-0 overflow-x-auto">
+            <span className="text-purple-300 uppercase tracking-wider mr-1 flex-shrink-0">Charms:</span>
+            {myCharms.map((cid, i) => {
+              const c = CHARMS[cid];
+              if (!c) return null;
+              return (
+                <span
+                  key={i}
+                  title={`${c.name}: ${c.description}`}
+                  className="flex-shrink-0"
+                >
+                  {c.emoji}
+                </span>
+              );
+            })}
+          </div>
+        );
+      })()}
 
       {/* Main content: 50/50 split */}
       <div className="flex-1 flex flex-col min-h-0">

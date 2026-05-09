@@ -57,6 +57,7 @@ export const GamePhase = {
   Street5: 'street_5',
   Scoring: 'scoring',
   Complete: 'complete',
+  CharmPick: 'charm_pick',
   MatchComplete: 'match_complete',
 } as const;
 export type GamePhase = (typeof GamePhase)[keyof typeof GamePhase];
@@ -125,6 +126,9 @@ export interface MatchSettings {
   interRoundDelayMs: number;   // delay between rounds before auto-starting next
 }
 
+/** Charm = roguelike modifier picked between rounds in run mode. */
+export type CharmId = string;
+
 export interface GameState {
   gameId: string;
   phase: GamePhase;
@@ -132,13 +136,19 @@ export interface GameState {
   playerOrder: string[];   // uid list for turn order
   street: number;          // 1-5
   round: number;           // 1-based current round (0 = pre-match lobby)
-  totalRounds: number;     // rounds per match (always 3)
+  totalRounds: number;     // rounds per match (3 normal, 5 in run mode)
   hostUid: string;         // uid of match creator
   settings: MatchSettings; // configurable match settings
   roundResults?: Record<string, RoundResult>;
   createdAt: number;
   updatedAt: number;
   phaseDeadline: number | null;  // Unix timestamp when phase expires
+  // ---- Run mode (roguelike deckbuilder) ----
+  runMode?: boolean;
+  charms?: Record<string, CharmId[]>;        // each player's owned charms
+  charmOptions?: CharmId[] | null;           // 3 charms offered this pick (shared)
+  charmPicks?: Record<string, CharmId>;      // who picked which charm this pick
+  charmBonuses?: Record<string, number>;     // last round's charm bonus per uid
 }
 
 // ---- Scoring types ----
