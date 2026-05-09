@@ -2,11 +2,15 @@ import type { Card, GameState } from '@shared/core/types';
 import { GamePhase } from '@shared/core/types';
 import { INITIAL_DEAL_COUNT, STREET_PLACE_COUNT } from '@shared/core/constants';
 import { CardComponent, CARD_ASPECT } from '../CardComponent.tsx';
-import { cardKey, boardCardCount } from '../../utils/card-utils.ts';
+import { boardCardCount } from '../../utils/card-utils.ts';
 import type { Placement } from '../../utils/card-utils.ts';
 
 interface MobileHandAreaProps {
   hand: Card[];
+  /** Cards still in hand, paired with their stable index in the original
+   *  dealt hand. The handIndex is used as the React key to avoid collisions
+   *  when run-mode mutations produce duplicate (rank, suit) cards. */
+  availableHand: Array<{ card: Card; handIndex: number }>;
   gameState: GameState;
   uid: string;
   selectedIndex: number | null;
@@ -17,13 +21,11 @@ interface MobileHandAreaProps {
 }
 
 export function MobileHandArea({
-  hand, gameState, uid, selectedIndex, onSelectCard,
+  hand, availableHand, gameState, uid, selectedIndex, onSelectCard,
   placements, submitting, cardWidthPx,
 }: MobileHandAreaProps) {
   const isInitialDeal = gameState.phase === GamePhase.InitialDeal;
   const requiredPlacements = isInitialDeal ? INITIAL_DEAL_COUNT : STREET_PLACE_COUNT;
-  const placedCardKeys = new Set(placements.map((p) => cardKey(p.card)));
-  const remainingHand = hand.filter((c) => !placedCardKeys.has(cardKey(c)));
 
   const player = gameState.players[uid];
   const alreadyPlaced = player ? boardCardCount(player.board) : 0;
@@ -62,8 +64,8 @@ export function MobileHandArea({
       >
         {showCards && !allPlaced ? (
           <div className="flex justify-center" style={{ gap: cardGap }}>
-            {remainingHand.map((card, i) => (
-              <div key={cardKey(card)} data-testid={`hand-card-${i}`}>
+            {availableHand.map(({ card, handIndex }, i) => (
+              <div key={handIndex} data-testid={`hand-card-${i}`}>
                 <CardComponent
                   card={card}
                   widthPx={cardWidthPx}

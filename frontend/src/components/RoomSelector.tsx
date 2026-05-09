@@ -114,14 +114,6 @@ export function RoomSelector({ displayName, setDisplayName, signIn, onRoomJoined
             </button>
           </div>
         </div>
-        <div className="mt-4 pt-3 border-t border-gray-700 flex justify-center">
-          <a
-            href="?game=kites"
-            className="text-xs text-cyan-400 hover:text-cyan-300"
-          >
-            Try Kites (cooperative) →
-          </a>
-        </div>
       </div>
       <Toast message={toast} />
     </div>

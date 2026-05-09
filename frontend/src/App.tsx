@@ -8,7 +8,6 @@ import { Lobby } from './components/Lobby.tsx';
 import { MobileGamePage } from './components/mobile/MobileGamePage.tsx';
 import { CharmPickPage } from './components/CharmPickPage.tsx';
 import { GamePhase } from '@shared/core/types';
-import { KitesApp } from './KitesApp.tsx';
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state = { error: null as Error | null };
@@ -47,11 +46,6 @@ function getRoomFromUrl(): string | null {
   return params.get('room') || null;
 }
 
-function getGameTypeFromUrl(): 'pineapple' | 'kites' {
-  const params = new URLSearchParams(window.location.search);
-  return params.get('game') === 'kites' ? 'kites' : 'pineapple';
-}
-
 function setRoomInUrl(roomId: string | null) {
   const url = new URL(window.location.href);
   if (roomId) {
@@ -62,45 +56,17 @@ function setRoomInUrl(roomId: string | null) {
   history.replaceState(null, '', url.toString());
 }
 
-function setGameTypeInUrl(game: 'pineapple' | 'kites') {
-  const url = new URL(window.location.href);
-  if (game === 'kites') {
-    url.searchParams.set('game', 'kites');
-  } else {
-    url.searchParams.delete('game');
-  }
-  // Switching game wipes any room param to prevent cross-game lookup.
-  url.searchParams.delete('room');
-  history.replaceState(null, '', url.toString());
-}
-
 function App() {
-  const [gameType, setGameType] = useState<'pineapple' | 'kites'>(getGameTypeFromUrl);
   const { user, loading: authLoading, displayName, setDisplayName, signIn } = useAuth();
   const [roomId, setRoomId] = useState<string | null>(getRoomFromUrl);
-  const { gameState, loading: gameLoading } = useGameState(gameType === 'pineapple' ? roomId : null);
-  const hand = usePlayerHand(user?.uid, gameType === 'pineapple' ? roomId : null);
+  const { gameState, loading: gameLoading } = useGameState(roomId);
+  const hand = usePlayerHand(user?.uid, roomId);
   // Sync URL on popstate (back/forward)
   useEffect(() => {
-    const onPopState = () => {
-      setRoomId(getRoomFromUrl());
-      setGameType(getGameTypeFromUrl());
-    };
+    const onPopState = () => setRoomId(getRoomFromUrl());
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
-
-  if (gameType === 'kites') {
-    return (
-      <KitesApp
-        onSwitchToPineapple={() => {
-          setGameTypeInUrl('pineapple');
-          setRoomId(null);
-          setGameType('pineapple');
-        }}
-      />
-    );
-  }
 
   const handleRoomJoined = (newRoomId: string) => {
     setRoomId(newRoomId);
