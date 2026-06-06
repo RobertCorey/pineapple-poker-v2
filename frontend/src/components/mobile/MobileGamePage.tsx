@@ -147,8 +147,8 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
 
   // Track placements by their stable hand index, NOT by card identity. Run-mode
   // mutations (Pair Party, Mono Suit, Spike, Royal Inflation, Ace Rush) can
-  // produce hands with duplicate (rank, suit) cards — using cardKey for
-  // identity collides duplicates and breaks React keys + state.
+  // produce hands with duplicate (rank, suit) cards — a plain rank+suit key
+  // collides duplicates and breaks React keys + state.
   const placedHandIndices = new Set(placements.map((p) => p.handIndex));
   const availableHand = hand
     .map((card, handIndex) => ({ card, handIndex }))
