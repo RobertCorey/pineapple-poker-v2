@@ -24,7 +24,7 @@ npm run dealer:build              # Compile TS → dealer/lib/
 npm run dealer                    # Run dealer process (connects to Firestore emulator)
 
 # Firebase Emulators
-firebase emulators:start          # auth=9099, functions=5001, firestore=8080, hosting=5000, UI=4000
+firebase emulators:start          # auth=9099, functions=5001, firestore=8080, hosting=5050, UI=4000
 
 # Install all workspaces
 npm install                       # One command installs all workspace deps
@@ -73,13 +73,14 @@ npm test                           # Playwright E2E tests
 
 E2E tests are in `e2e/`. Each test generates a unique room code for isolation — no shared state between tests.
 
-6 tests in the main suite (`npm test`):
+`e2e/` has 8 specs. The default `npm test` suite runs 6 (`bot` + `stress` are always ignored via `playwright.config.ts`; production runs additionally ignore `scoring` + `sit-out`):
 - `happy-path.spec.ts` — 2-player full 3-round match, play again
 - `card-placement.spec.ts` — card placement UI, auto-submit, auto-discard
-- `sit-out.spec.ts` — timeout auto-foul, player active next round
+- `sit-out.spec.ts` — timeout auto-places cards; player stays active next round
 - `leave-game.spec.ts` — player leaves mid-round, game continues for remaining player
 - `observer.spec.ts` — late joiner observes full match, promoted via play-again, 3-player game
 - `scoring.spec.ts` — foul penalty scores (+6/-6), pairwise breakdown, cumulative totals
+- `bot.spec.ts`, `stress.spec.ts` — always ignored by config (manual / load testing)
 
 
 ### All dealer tests
@@ -121,7 +122,7 @@ pineapple-poker (root workspace)
 | Directory | Purpose | Module system |
 |-----------|---------|---------------|
 | `frontend/src/` | React frontend | ESM (Vite) |
-| `functions/src/` | Cloud Functions backend (write-only endpoints) | CommonJS |
+| `functions/src/` | Cloud Functions backend (player + admin callables) | CommonJS |
 | `dealer/src/` | Dealer service (game advancement, timeouts) | CommonJS |
 | `shared/` | Game logic used by all three | Compiled into each |
 
@@ -138,13 +139,20 @@ Room IDs are 6-char alphanumeric codes (no ambiguous chars I/O/0/1). Multiple ga
 
 ### Game flow
 
-**Cloud Functions** (write-only endpoints in `functions/src/`):
-All functions require `roomId` in request data.
+**Cloud Functions** (`functions/src/`) — 12 callables + 1 scheduled. Player-facing ones require `roomId` in request data.
+
+Player actions (`player-actions.ts`):
 1. **joinGame** — creates room (if `create: true`) or adds player to existing room
 2. **leaveGame** — removes player entirely
 3. **placeCards** — validates & applies card placements
-4. **startMatch** — host starts the match
+4. **startMatch** — host starts the match (accepts `runMode` for Pineapple Run)
 5. **playAgain** — host restarts after match complete
+6. **addBot** / **removeBot** — manage bot players
+7. **pickCharm** / **pickMutation** — run-mode drafting during `charm_pick`
+
+Admin (`admin-actions.ts`): **adminDeleteRoom**, **adminKickPlayer**, **adminKillAllGames** — all gated to the admin email.
+
+Scheduled (`cleanup.ts`): **pruneOldGames** — deletes stale games on a timer.
 
 **Dealer service** (`dealer/src/`) — sole authority for all game state transitions:
 - Listens to entire `games` collection via `onSnapshot` (collection listener)
@@ -162,8 +170,9 @@ Game engine in `dealer/src/game-engine.ts` — all functions take `(db, roomId)`
 - `resetForNextRound(db, roomId)` — promote observers, reset state
 - `handlePhaseTimeout(db, roomId)` — auto-foul players who haven't placed
 - `checkAndAdvance(db, roomId)` — check all placed and advance (recursive for all-fouled cases)
+- Run mode also flows through these: `maybeStartRound` applies a player's owned deck mutations before shuffling; `scoreRound` adds charm bonuses + foul-shield reductions and rolls the next round's charm/mutation options, transitioning to `charm_pick`.
 
-Phases: `lobby` → `initial_deal` → `street_2` → `street_3` → `street_4` → `street_5` → `scoring` → `complete`
+Phases: `lobby` → `initial_deal` → `street_2` → `street_3` → `street_4` → `street_5` → `scoring` → (`charm_pick`, run mode only) → `complete` / `match_complete`
 
 ### Match Settings
 
@@ -173,16 +182,23 @@ Configurable per-room via `MatchSettings` (stored in game doc as `settings`):
 
 Host sets settings in Lobby UI before starting. In dev mode, `?timeout=5000` URL param pre-fills the dropdown.
 
+### Game Modes
+
+Two modes share the same engine, selected by the host via the `runMode` flag passed to `startMatch`:
+
+- **Classic OFC Pineapple** (default): 3 rounds.
+- **Pineapple Run** (roguelike deckbuilder, `runMode: true`): 5 rounds (`ROUNDS_PER_RUN`). Between rounds the game enters the `charm_pick` phase where players draft a **charm** (score bonus, `shared/game-logic/charms.ts`) and a **deck mutation** (permanent personal-deck change, `shared/game-logic/mutations.ts`). Charms/mutations stack across rounds. Run-mode state lives on the game doc (`runMode`, `charms`, `charmOptions`, `charmPicks`, `charmBonuses`, `mutations`, `mutationOptions`, `mutationPicks` — see `shared/core/types.ts`). Picks go through the `pickCharm` / `pickMutation` Cloud Functions; UI in `frontend/src/components/CharmPickPage.tsx`.
+
 ### Timeout = Auto-Place
 
 When phaseDeadline passes, timed-out players get cards auto-placed randomly into available board slots. Player stays active for remaining streets.
 
-### Scoring (simplified)
+### Scoring
 
 - +1/-1 per row won/lost
 - +3 scoop bonus (sweep all 3 rows)
 - -6 foul penalty per opponent (timeout or bad row ordering)
-- No royalties
+- Royalties: bonus points for strong rows, scored as a net differential (A's royalties minus B's) per pairwise comparison. Tables live in `shared/core/constants.ts` (top pair/trips, middle, bottom). Neither player's royalties count when either fouls.
 
 ### Observer mode
 
@@ -199,12 +215,17 @@ Players who join mid-round become observers (added to `players` but NOT `playerO
 - Cloud Functions called via `httpsCallable` from firebase/functions SDK — all include `roomId`
 - Frontend imports shared code via `@shared/` alias (e.g., `import type { Card } from '@shared/core/types'`)
 
-- `handDescription.ts` utility: human-readable hand labels (e.g., "Pair (K)", "Flush (A-high)")
 - `PlayerBoard` shows `RowEval` labels on completed rows using hand-evaluation functions
 
 ### Emulators
 
-Emulator connections activate only when `import.meta.env.DEV` is true (in `frontend/src/firebase.ts`). Ports: auth=9099, functions=5001, firestore=8080, hosting=5000, UI=4000.
+Emulator connections activate only when `import.meta.env.DEV` is true (in `frontend/src/firebase.ts`). Ports: auth=9099, functions=5001, firestore=8080, hosting=5050, UI=4000.
+
+The Firebase emulators require a **JDK 21+**. `scripts/dev-up.sh` auto-detects a Homebrew `openjdk` if `java` isn't on PATH. In DEV, Firestore is initialized with `experimentalForceLongPolling` because the emulator's WebChannel streaming is flaky (intermittently drops the first listener snapshot); production keeps the default streaming transport.
+
+### E2E reliability
+
+All e2e specs share one dealer + one emulator, so Playwright runs **serially** (`workers: 1` in `playwright.config.ts`) — parallel workers starved the shared backend and flaked the heavy specs. `e2e/00-warmup.spec.ts` runs first to absorb the worker browser's one-time cold-start cost.
 
 ## Critical: Firestore transaction ordering
 
@@ -322,7 +343,7 @@ Merge to main
 - **Initial deal**: 5 cards, place all 5
 - **Streets 2–5**: deal 3 cards, place 2, discard 1
 - **Foul**: rows not in ascending strength (bottom ≥ middle > top) — penalty of 6 points per opponent
-- **Scoring**: pairwise row comparisons + scoop bonus (3 pts for winning all 3 rows)
+- **Scoring**: pairwise row comparisons + scoop bonus (3 pts for winning all 3 rows) + royalties (net differential per comparison; void when either player fouls)
 
 ## CI/CD & Deployment
 

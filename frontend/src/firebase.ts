@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app'
 import { getAuth, connectAuthEmulator } from 'firebase/auth'
-import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore'
+import { getFirestore, initializeFirestore, connectFirestoreEmulator } from 'firebase/firestore'
 import { getFunctions, connectFunctionsEmulator } from 'firebase/functions'
 import { getAnalytics, logEvent, isSupported, type Analytics } from 'firebase/analytics'
 
@@ -16,7 +16,14 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig)
 export const auth = getAuth(app)
-export const db = getFirestore(app)
+// In DEV we talk to the Firestore emulator, whose WebChannel streaming is flaky:
+// Listen channels intermittently ERR_ABORT and never deliver the first snapshot,
+// which strands the UI waiting on game state (the e2e join → start-match flake).
+// Force long-polling for a reliable emulator connection. Production keeps the
+// default streaming transport (real Firestore handles WebChannel fine).
+export const db = import.meta.env.DEV
+  ? initializeFirestore(app, { experimentalForceLongPolling: true })
+  : getFirestore(app)
 export const functions = getFunctions(app)
 
 if (import.meta.env.DEV) {

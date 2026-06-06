@@ -89,4 +89,7 @@ export default async function globalSetup() {
       console.warn('Emulator warmup failed (non-fatal)');
     }
   }
+  // NOTE: the *browser*-side cold path (first Vite compile + first Firestore
+  // listener handshake in the Playwright worker's own browser) is warmed by
+  // e2e/00-warmup.spec.ts, which must run in the worker — globalSetup can't.
 }
