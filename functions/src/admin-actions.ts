@@ -99,39 +99,3 @@ export const adminKickPlayer = onCall({ maxInstances: 10 }, async (request) => {
 
   return { success: true };
 });
-
-// ---- debugRecentGames ----
-//
-// Returns the N most recent games for postmortem debugging. Game documents
-// are already publicly readable per firestore.rules so no auth gate; this
-// just provides a convenient ordered slice. Defaults to last 5; max 25.
-
-const DebugRecentGamesSchema = z.object({
-  limit: z.number().int().min(1).max(25).optional(),
-  runModeOnly: z.boolean().optional(),
-});
-
-export const debugRecentGames = onCall({ maxInstances: 5 }, async (request) => {
-  const parsed = DebugRecentGamesSchema.safeParse(request.data ?? {});
-  if (!parsed.success) {
-    throw new HttpsError('invalid-argument', 'Invalid request.');
-  }
-  const limit = parsed.data.limit ?? 5;
-  const runModeOnly = parsed.data.runModeOnly ?? false;
-
-  const snap = await db()
-    .collection('games')
-    .orderBy('updatedAt', 'desc')
-    .limit(limit * 3) // overfetch when filtering
-    .get();
-
-  const games: unknown[] = [];
-  for (const doc of snap.docs) {
-    const data = doc.data();
-    if (runModeOnly && !data.runMode) continue;
-    games.push({ roomId: doc.id, ...data });
-    if (games.length >= limit) break;
-  }
-
-  return { games };
-});

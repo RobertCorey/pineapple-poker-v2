@@ -68,4 +68,11 @@ npm run dealer:build       # Dealer
 - **Initial deal**: 5 cards, place all 5
 - **Streets 2-5**: Deal 3 cards, place 2, discard 1
 - **Foul**: Rows not in ascending strength (bottom >= middle > top) — penalty of 6 points per opponent
-- **Scoring**: Pairwise row comparisons (+1/-1 per row), scoop bonus (+3 for winning all 3 rows)
+- **Scoring**: Pairwise row comparisons (+1/-1 per row), scoop bonus (+3 for winning all 3 rows), plus royalty bonuses for strong rows (scored as a net differential between the two players; void when either fouls)
+
+## Game Modes
+
+The host picks a mode in the lobby:
+
+- **Classic OFC Pineapple** (default): 3-round match.
+- **Pineapple Run**: a 5-round single-player-style roguelike. Between rounds you draft a *charm* (score bonus) and a *deck mutation* (permanent change to your deck), which stack across the run.
