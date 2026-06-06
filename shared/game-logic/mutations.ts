@@ -12,6 +12,7 @@
  */
 import type { Card, MutationId, MutationPick, Suit, Rank } from '../core/types';
 import { Suit as S, Rank as R } from '../core/types';
+import { createDeck } from './deck';
 
 export interface MutationDef {
   id: MutationId;
@@ -45,10 +46,10 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-const STANDARD_DECK_SIZE = 52;
-
 /** Cards needed to play a full round: 5 dealt + 4 streets * 3 = 17. */
 export const MIN_DECK_SIZE = 17;
+
+const ALL_SUITS: Suit[] = [S.Spades, S.Hearts, S.Diamonds, S.Clubs];
 
 function cardsByRank(deck: Card[], minRank: number): Card[] {
   return deck.filter((c) => c.rank >= minRank);
@@ -195,46 +196,46 @@ export const MUTATIONS: Record<MutationId, MutationDef> = {
 export const MUTATION_IDS: MutationId[] = Object.keys(MUTATIONS);
 
 /**
- * Pick `count` random mutations the player can be offered, excluding any
- * mutation ids already owned by the player and any whose application would
- * shrink the deck below the playable minimum (after the player's prior picks).
- *
- * `currentDeckSize` is the size of the player's deck after applying all of
- * their prior mutations. A mutation is excluded if either:
- *   - it's a removal-style mutation that would drop the deck below MIN_DECK_SIZE
- *   - it's already owned by the player
+ * Worst-case (smallest) deck size after applying `candidate` on top of a
+ * player's `ownedPicks`. Computed from the ACTUAL resulting deck (not the
+ * approxDeckSize ratio heuristic), so stacked removals are counted exactly.
+ * For target-required mutations we take the minimum over all targets, so a
+ * candidate that COULD underflow for some target is never offered.
  */
-export function rollMutationOptions(
-  count: number,
-  ownedByMe: Set<MutationId>,
-  currentDeckSize: number,
-): MutationId[] {
-  const playable = MUTATION_IDS.filter((id) => {
-    if (ownedByMe.has(id)) return false;
-    const m = MUTATIONS[id];
-    // Reject mutations that approximately shrink below the playable minimum.
-    // We approximate "stacked shrink" by scaling the mutation's relative
-    // shrink rate by the player's current deck size.
-    if (m.approxDeckSize < STANDARD_DECK_SIZE) {
-      const shrinkRatio = m.approxDeckSize / STANDARD_DECK_SIZE;
-      const projected = currentDeckSize * shrinkRatio;
-      if (projected < MIN_DECK_SIZE) return false;
-    }
-    return true;
-  });
+export function deckSizeAfter(ownedPicks: MutationPick[], candidate: MutationId): number {
+  const base = applyMutationsToDeck(createDeck(), ownedPicks);
+  const def = MUTATIONS[candidate];
+  if (!def) return base.length;
+  if (def.requiresTarget === 'suit') {
+    let min = Infinity;
+    for (const s of ALL_SUITS) min = Math.min(min, def.apply(base, s).length);
+    return min === Infinity ? base.length : min;
+  }
+  // `cull` derives its kept size from a numeric seed in `target`, but it is
+  // always ceil(len/2) regardless of the seed, so any value sizes it correctly.
+  return def.apply(base, candidate === 'cull' ? '1' : undefined).length;
+}
+
+/**
+ * Pick up to `count` random mutations to offer this player. Excludes mutations
+ * they already own and any whose application would drop their deck below
+ * MIN_DECK_SIZE (the cards one round needs). There is intentionally NO fallback
+ * to owned/over-shrinking mutations — offering fewer than `count` is fine, and
+ * the non-shrinking mutations keep the pool well stocked.
+ */
+export function rollMutationOptions(count: number, ownedPicks: MutationPick[]): MutationId[] {
+  const ownedIds = new Set(ownedPicks.map((p) => p.id));
+  const playable = MUTATION_IDS.filter(
+    (id) => !ownedIds.has(id) && deckSizeAfter(ownedPicks, id) >= MIN_DECK_SIZE,
+  );
 
   const out: MutationId[] = [];
   const taken = new Set<number>();
-  // Source falls back to MUTATION_IDS if too few playable ones remain
-  const source = playable.length >= count ? playable : MUTATION_IDS;
-  while (out.length < count && taken.size < source.length) {
-    const i = Math.floor(Math.random() * source.length);
+  while (out.length < count && taken.size < playable.length) {
+    const i = Math.floor(Math.random() * playable.length);
     if (taken.has(i)) continue;
     taken.add(i);
-    out.push(source[i]);
-  }
-  while (out.length < count) {
-    out.push(source[Math.floor(Math.random() * source.length)]);
+    out.push(playable[i]);
   }
   return out;
 }
