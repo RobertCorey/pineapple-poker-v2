@@ -18,7 +18,35 @@ for arg in "$@"; do
   esac
 done
 
-PORTS=(8080 5001 9099 4000 5000 5173 5555)
+PORTS=(8080 5001 9099 4000 5050 5173 5555)
+
+# ── Ensure a JDK 21+ is on PATH (Firebase emulators require it) ────────────────
+# macOS ships a /usr/bin/java stub that errors, and Homebrew's openjdk is
+# keg-only (not on PATH). Self-heal here so the suite runs regardless of the
+# user's shell config. No-op on CI (setup-java already provides JDK 21+).
+ensure_java() {
+  java_major() { java -version 2>&1 | sed -n 's/.*version "\([0-9][0-9]*\).*/\1/p' | head -1; }
+  local m
+  m="$(java_major 2>/dev/null || true)"
+  if [ -n "$m" ] && [ "$m" -ge 21 ] 2>/dev/null; then return 0; fi
+  for cand in \
+    /opt/homebrew/opt/openjdk/bin \
+    /opt/homebrew/opt/openjdk@21/bin \
+    /usr/local/opt/openjdk/bin; do
+    if [ -x "$cand/java" ]; then
+      local cm
+      cm="$("$cand/java" -version 2>&1 | sed -n 's/.*version "\([0-9][0-9]*\).*/\1/p' | head -1)"
+      if [ -n "$cm" ] && [ "$cm" -ge 21 ] 2>/dev/null; then
+        export PATH="$cand:$PATH"
+        echo "  Using JDK at $cand ($("$cand/java" -version 2>&1 | head -1))"
+        return 0
+      fi
+    fi
+  done
+  echo "ERROR: Firebase emulators need a JDK 21+. Install one (e.g. 'brew install openjdk') and put 'java' on PATH." >&2
+  exit 1
+}
+ensure_java
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
