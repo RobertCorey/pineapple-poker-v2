@@ -24,7 +24,7 @@ npm run dealer:build              # Compile TS → dealer/lib/
 npm run dealer                    # Run dealer process (connects to Firestore emulator)
 
 # Firebase Emulators
-firebase emulators:start          # auth=9099, functions=5001, firestore=8080, hosting=5000, UI=4000
+firebase emulators:start          # auth=9099, functions=5001, firestore=8080, hosting=5050, UI=4000
 
 # Install all workspaces
 npm install                       # One command installs all workspace deps
@@ -204,7 +204,13 @@ Players who join mid-round become observers (added to `players` but NOT `playerO
 
 ### Emulators
 
-Emulator connections activate only when `import.meta.env.DEV` is true (in `frontend/src/firebase.ts`). Ports: auth=9099, functions=5001, firestore=8080, hosting=5000, UI=4000.
+Emulator connections activate only when `import.meta.env.DEV` is true (in `frontend/src/firebase.ts`). Ports: auth=9099, functions=5001, firestore=8080, hosting=5050, UI=4000.
+
+The Firebase emulators require a **JDK 21+**. `scripts/dev-up.sh` auto-detects a Homebrew `openjdk` if `java` isn't on PATH. In DEV, Firestore is initialized with `experimentalForceLongPolling` because the emulator's WebChannel streaming is flaky (intermittently drops the first listener snapshot); production keeps the default streaming transport.
+
+### E2E reliability
+
+All e2e specs share one dealer + one emulator, so Playwright runs **serially** (`workers: 1` in `playwright.config.ts`) — parallel workers starved the shared backend and flaked the heavy specs. `e2e/00-warmup.spec.ts` runs first to absorb the worker browser's one-time cold-start cost.
 
 ## Critical: Firestore transaction ordering
 
