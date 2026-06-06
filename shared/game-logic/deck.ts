@@ -48,3 +48,14 @@ export function dealCards(
 export function createShuffledDeck(): Card[] {
   return shuffleDeck(createDeck());
 }
+
+/**
+ * Ensure a deck has at least `min` cards by appending cards from a fresh
+ * shuffled standard deck. Safety net for Pineapple Run: shrink mutations
+ * (and their stacks) can otherwise starve a round, making dealCards throw and
+ * permanently soft-locking the room. Topping up keeps the round dealable.
+ */
+export function topUpDeck(deck: Card[], min: number): Card[] {
+  if (deck.length >= min) return deck;
+  return [...deck, ...createShuffledDeck()].slice(0, min);
+}

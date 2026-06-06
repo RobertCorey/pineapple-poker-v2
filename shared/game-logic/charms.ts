@@ -197,9 +197,10 @@ export const CHARMS: Record<CharmId, CharmDef> = {
     id: 'foul_shield',
     name: 'Foul Shield',
     emoji: '🛡️',
-    description: 'Foul penalty reduced by 10 per opponent. Fouls become small wins.',
+    description: 'Refunds the foul penalty per opponent — a foul costs you ~nothing (never a net gain).',
     bonus: () => 0,
-    foulShield: 10,
+    // Capped at FOUL_PENALTY by the scorer, so fouling is at worst neutral, not +EV.
+    foulShield: 6,
   },
 };
 
@@ -225,18 +226,26 @@ export function rollCharmOptions(count: number, excluded: Set<CharmId>): CharmId
   return out;
 }
 
-/** Total bonus points from a player's owned charms applied to their final board. */
-export function applyCharmBonuses(charms: CharmId[] | undefined, board: Board): number {
+/**
+ * Sum a player's charm bonuses for a board WITHOUT any foul check. Callers that
+ * already know the player's foul status (e.g. run-mode scoring, which uses
+ * run-aware foul detection) should use this and gate on their own decision.
+ */
+export function rawCharmBonus(charms: CharmId[] | undefined, board: Board): number {
   if (!charms || charms.length === 0) return 0;
-  // Don't grant board-state bonuses to fouled players (they didn't make a valid hand).
-  if (isFoul(board)) return 0;
   let total = 0;
   for (const id of charms) {
     const def = CHARMS[id];
-    if (!def) continue;
-    total += def.bonus(board);
+    if (def) total += def.bonus(board);
   }
   return total;
+}
+
+/** Total bonus from a player's owned charms — 0 if the board fouls (core check). */
+export function applyCharmBonuses(charms: CharmId[] | undefined, board: Board): number {
+  // Don't grant board-state bonuses to fouled players (they didn't make a valid hand).
+  if (isFoul(board)) return 0;
+  return rawCharmBonus(charms, board);
 }
 
 /** Total foul-penalty reduction from a player's foul-shield charms (per opponent). */

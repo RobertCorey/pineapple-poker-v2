@@ -6,6 +6,7 @@ import { MUTATIONS } from '@shared/game-logic/mutations';
 import { isFoul } from '@shared/game-logic/scoring';
 import { pickCharm, pickMutation, leaveGame } from '../api.ts';
 import { useToast } from '../hooks/useToast.ts';
+import { useCountdown } from '../hooks/useCountdown.ts';
 import { Toast } from './Toast.tsx';
 import { PlayerBoard } from './PlayerBoard.tsx';
 
@@ -32,6 +33,9 @@ export function CharmPickPage({ gameState, uid, roomId, onLeaveRoom }: CharmPick
   // is currently confirming; when set we show suit chips below it.
   const [targetingMutation, setTargetingMutation] = useState<string | null>(null);
   const { message: toast, showToast } = useToast();
+  // Drafting is timed: the dealer auto-picks for anyone who hasn't chosen when
+  // this hits 0, so an idle/disconnected player can't stall the run.
+  const countdown = useCountdown(gameState.phaseDeadline);
 
   const charmOptions = gameState.charmOptions ?? [];
   const mutationOptions = gameState.mutationOptions ?? [];
@@ -134,7 +138,11 @@ export function CharmPickPage({ gameState, uid, roomId, onLeaveRoom }: CharmPick
             <span className="text-gray-500">{roomId}</span>
           </div>
           <div className="text-gray-400">
-            {allChose ? 'starting next round...' : 'pick a charm + mutation'}
+            {allChose
+              ? 'starting next round...'
+              : isObserver
+                ? 'watching — players are drafting'
+                : `pick a charm + mutation${countdown > 0 ? ` · ${countdown}s` : ''}`}
           </div>
           <button
             onClick={handleLeave}

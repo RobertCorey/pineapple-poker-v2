@@ -5,7 +5,6 @@ import type {
   Board,
   PlayerState,
   CharmId,
-  MutationId,
   MutationPick,
   Suit,
 } from '../../shared/core/types';
@@ -17,12 +16,14 @@ import {
   TOP_ROW_SIZE,
   FIVE_CARD_ROW_SIZE,
 } from '../../shared/core/constants';
-import { createShuffledDeck, dealCards } from '../../shared/game-logic/deck';
+import { createShuffledDeck, createDeck, dealCards, shuffleDeck, topUpDeck } from '../../shared/game-logic/deck';
 import { scoreAllPlayers, isFoul } from '../../shared/game-logic/scoring';
-import { applyCharmBonuses, foulShieldReduction, rollCharmOptions } from '../../shared/game-logic/charms';
+import { rollCharmOptions } from '../../shared/game-logic/charms';
+import { scoreRunPlayers } from '../../shared/game-logic/run-scoring';
 import {
   applyMutationsToDeck,
   rollMutationOptions,
+  MIN_DECK_SIZE,
   MUTATIONS,
 } from '../../shared/game-logic/mutations';
 import { gameDoc, handDoc, deckDoc } from '../../shared/core/firestore-paths';
@@ -89,14 +90,12 @@ export async function maybeStartRound(db: Firestore, roomId: string): Promise<bo
       if (game.runMode) {
         const ownedMutations = game.mutations?.[uid];
         if (ownedMutations && ownedMutations.length > 0) {
-          deck = applyMutationsToDeck(deck, ownedMutations);
-          // Reshuffle after mutation (mutations may have appended cards or
-          // changed order via filtering).
-          for (let i = deck.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [deck[i], deck[j]] = [deck[j], deck[i]];
-          }
+          // Reshuffle after mutation (mutations may append cards or change order).
+          deck = shuffleDeck(applyMutationsToDeck(deck, ownedMutations));
         }
+        // Safety net: shrink mutations (and their stacks) can starve a round.
+        // Top the deck back up so dealing can never throw and soft-lock the room.
+        deck = topUpDeck(deck, MIN_DECK_SIZE);
       }
       const { dealt, remaining } = dealCards(deck, INITIAL_DEAL_COUNT);
 
@@ -239,56 +238,43 @@ export async function scoreRound(db: Firestore, roomId: string): Promise<void> {
     const game = parseGameState(snap.data());
     if (game.phase !== GP.Scoring) return;
 
-    // Build boards map and fouls map
+    // Build boards map. Track declared (timeout) fouls separately so run-mode
+    // scoring can apply its own run-aware foul detection (five-of-a-kind etc).
     const boards = new Map<string, Board>();
-    const fouls = new Map<string, boolean>();
+    const declaredFouls = new Map<string, boolean>();
     for (const uid of game.playerOrder) {
       const player = game.players[uid];
       boards.set(uid, player.board);
-      // Fouled if auto-fouled (timeout) OR natural foul (bad row ordering)
-      fouls.set(uid, player.fouled || isFoul(player.board));
+      declaredFouls.set(uid, player.fouled);
     }
 
-    const result = scoreAllPlayers(boards, fouls);
-
-    // ---- Apply run-mode adjustments: foul shield + charm bonuses ----
-    const opponentCount = Math.max(0, game.playerOrder.length - 1);
-    const charmBonuses: Record<string, number> = {};
-    const adjustedNetScores: Record<string, number> = {};
-
-    for (const ps of result.players) {
-      let net = ps.netScore;
-      let charmBonus = 0;
-      const ownedCharms: CharmId[] | undefined = game.charms?.[ps.uid];
-
-      if (game.runMode) {
-        if (ps.fouled) {
-          // Foul shield: refund some of the foul penalty per opponent.
-          // Intentionally NOT capped at FOUL_PENALTY — fouling on purpose with
-          // a strong shield is a valid (and funny) strategy. You forfeit all
-          // your other charm bonuses for the round in exchange.
-          const shield = foulShieldReduction(ownedCharms);
-          if (shield > 0) {
-            net += shield * opponentCount;
-          }
-        } else {
-          const board = game.players[ps.uid]?.board;
-          if (board) charmBonus = applyCharmBonuses(ownedCharms, board);
-          net += charmBonus;
-        }
-      }
-
-      charmBonuses[ps.uid] = charmBonus;
-      adjustedNetScores[ps.uid] = net;
-    }
-
-    // Build results map and accumulate scores
     const roundResults: Record<string, { netScore: number; fouled: boolean }> = {};
-    for (const ps of result.players) {
-      roundResults[ps.uid] = {
-        netScore: adjustedNetScores[ps.uid],
-        fouled: ps.fouled,
-      };
+    let charmBonuses: Record<string, number> = {};
+
+    if (game.runMode) {
+      // Forked run-mode scorer: run-aware evaluation (five-of-a-kind) + charm
+      // bonuses + capped foul shield. Kept entirely out of the classic path.
+      const charmsByUid: Record<string, CharmId[] | undefined> = {};
+      for (const uid of game.playerOrder) charmsByUid[uid] = game.charms?.[uid];
+      const run = scoreRunPlayers(boards, declaredFouls, charmsByUid);
+      for (const uid of game.playerOrder) {
+        roundResults[uid] = {
+          netScore: run.netScores[uid] ?? 0,
+          fouled: run.fouled[uid] ?? false,
+        };
+      }
+      charmBonuses = run.charmBonuses;
+    } else {
+      const fouls = new Map<string, boolean>();
+      for (const uid of game.playerOrder) {
+        const player = game.players[uid];
+        // Fouled if auto-fouled (timeout) OR natural foul (bad row ordering)
+        fouls.set(uid, player.fouled || isFoul(player.board));
+      }
+      const result = scoreAllPlayers(boards, fouls);
+      for (const ps of result.players) {
+        roundResults[ps.uid] = { netScore: ps.netScore, fouled: ps.fouled };
+      }
     }
 
     // Update game state
@@ -320,31 +306,21 @@ export async function scoreRound(db: Firestore, roomId: string): Promise<void> {
       }
       const charmOptions = rollCharmOptions(3, allOwnedCharms);
 
-      // Roll 3 mutation options. We exclude mutations ANY player already owns
-      // so each player isn't offered the same mutation twice. Use the smallest
-      // current deck size across players as the shrink-budget heuristic.
-      const allOwnedMutations = new Set<MutationId>();
-      if (game.mutations) {
-        for (const picks of Object.values(game.mutations)) {
-          for (const p of picks) allOwnedMutations.add(p.id);
+      // Roll 3 mutation options against the most-constrained (smallest actual
+      // deck) player's picks, using EXACT resulting sizes. Per-player safety is
+      // additionally enforced at pick time (pickMutation) and by the deck
+      // top-up in maybeStartRound, so a shared option can never brick anyone.
+      let refPicks: MutationPick[] = [];
+      let refSize = Infinity;
+      for (const uid of game.playerOrder) {
+        const picks = game.mutations?.[uid] ?? [];
+        const size = applyMutationsToDeck(createDeck(), picks).length;
+        if (size < refSize) {
+          refSize = size;
+          refPicks = picks;
         }
       }
-      // Approximate each player's current deck size by stacking mutation
-      // approxDeckSize ratios. We use the minimum so we don't offer a
-      // shrink-mutation that would crash the smallest deck.
-      let smallestDeckSize = 52;
-      if (game.mutations) {
-        for (const picks of Object.values(game.mutations)) {
-          let size = 52;
-          for (const pick of picks) {
-            const def = MUTATIONS[pick.id];
-            if (!def) continue;
-            size = Math.round(size * (def.approxDeckSize / 52));
-          }
-          if (size < smallestDeckSize) smallestDeckSize = size;
-        }
-      }
-      const mutationOptions = rollMutationOptions(3, allOwnedMutations, smallestDeckSize);
+      const mutationOptions = rollMutationOptions(3, refPicks);
 
       tx.update(gameRef, {
         phase: GP.CharmPick,
@@ -355,7 +331,9 @@ export async function scoreRound(db: Firestore, roomId: string): Promise<void> {
         charmPicks: {},
         mutationOptions,
         mutationPicks: {},
-        phaseDeadline: null, // no timer — wait for both picks
+        // Deadline so an idle/disconnected human can't soft-lock the run; the
+        // dealer auto-picks for anyone who hasn't chosen when this fires.
+        phaseDeadline: Date.now() + game.settings.turnTimeoutMs,
         updatedAt: Date.now(),
       });
       return;
@@ -428,6 +406,60 @@ export async function botPickCharm(db: Firestore, roomId: string, botUid: string
 }
 
 /**
+ * Auto-pick a charm + mutation for EVERY active player who hasn't chosen yet.
+ * Used when the charm_pick deadline fires, so an idle/disconnected human can't
+ * soft-lock the run. Picks random offered options; the deck top-up in
+ * maybeStartRound guarantees the result is still dealable.
+ */
+export async function autoFillCharmPicks(db: Firestore, roomId: string): Promise<boolean> {
+  const gameRef = db.doc(gameDoc(roomId));
+
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(gameRef);
+    if (!snap.exists) return false;
+
+    const game = parseGameState(snap.data());
+    if (game.phase !== GP.CharmPick) return false;
+    if (!game.runMode) return false;
+
+    const charmOptions = game.charmOptions ?? [];
+    const mutationOptions = game.mutationOptions ?? [];
+    const charmPicks = { ...(game.charmPicks ?? {}) };
+    const mutationPicks = { ...(game.mutationPicks ?? {}) };
+
+    let changed = false;
+    for (const uid of game.playerOrder) {
+      if (!charmPicks[uid] && charmOptions.length > 0) {
+        charmPicks[uid] = charmOptions[Math.floor(Math.random() * charmOptions.length)];
+        changed = true;
+      }
+      if (!mutationPicks[uid] && mutationOptions.length > 0) {
+        const id = mutationOptions[Math.floor(Math.random() * mutationOptions.length)];
+        const def = MUTATIONS[id];
+        const pick: MutationPick = { id };
+        if (def?.requiresTarget === 'suit') {
+          const suits: Suit[] = [S.Spades, S.Hearts, S.Diamonds, S.Clubs];
+          pick.target = suits[Math.floor(Math.random() * suits.length)];
+        } else if (id === 'cull') {
+          pick.target = String(Math.floor(Math.random() * 0xFFFFFFFF) || 1);
+        }
+        mutationPicks[uid] = pick;
+        changed = true;
+      }
+    }
+
+    if (!changed) return false;
+
+    tx.update(gameRef, {
+      charmPicks,
+      mutationPicks,
+      updatedAt: Date.now(),
+    });
+    return true;
+  });
+}
+
+/**
  * After all active players have picked a charm, apply picks and advance to
  * the next round (Lobby → InitialDeal via maybeStartRound).
  */
@@ -442,12 +474,27 @@ export async function processCharmPicks(db: Firestore, roomId: string): Promise<
     if (game.phase !== GP.CharmPick) return false;
     if (!game.runMode) return false;
 
-    // Wait until ALL active players have picked BOTH a charm and a mutation
-    // (bots are picked by botPickCharm)
+    // A player left mid-run: a run needs >=2 players, so end it rather than
+    // stranding the survivor in an unstartable next round.
+    if (game.playerOrder.length < 2) {
+      tx.update(gameRef, {
+        phase: GP.MatchComplete,
+        phaseDeadline: null,
+        updatedAt: Date.now(),
+      });
+      return true;
+    }
+
+    // Wait until ALL active players have picked a charm (and a mutation, unless
+    // no safe mutation could be offered this round). Bots/idle humans are
+    // auto-picked by botPickCharm / autoFillCharmPicks.
     const charmPicks = game.charmPicks ?? {};
     const mutationPicks = game.mutationPicks ?? {};
+    const mutationOptions = game.mutationOptions ?? [];
     const allPicked = game.playerOrder.every(
-      (uid) => charmPicks[uid] != null && mutationPicks[uid] != null,
+      (uid) =>
+        charmPicks[uid] != null &&
+        (mutationPicks[uid] != null || mutationOptions.length === 0),
     );
     if (!allPicked) return false;
 

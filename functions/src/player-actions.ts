@@ -2,7 +2,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { z } from 'zod';
-import type { Card, Board, Row, PlayerState } from '../../shared/core/types';
+import type { Card, Board, Row, PlayerState, MutationPick } from '../../shared/core/types';
 import { GamePhase as GP } from '../../shared/core/types';
 import {
   INITIAL_DEAL_COUNT,
@@ -15,7 +15,8 @@ import {
   DEFAULT_MATCH_SETTINGS,
 } from '../../shared/core/constants';
 import { CHARMS } from '../../shared/game-logic/charms';
-import { MUTATIONS } from '../../shared/game-logic/mutations';
+import { MUTATIONS, applyMutationsToDeck, MIN_DECK_SIZE } from '../../shared/game-logic/mutations';
+import { createDeck } from '../../shared/game-logic/deck';
 import { gameDoc, handDoc, deckDoc } from '../../shared/core/firestore-paths';
 import { emptyBoard } from '../../shared/game-logic/board-utils';
 import { parseGameState, CardSchema, MatchSettingsSchema } from '../../shared/core/schemas';
@@ -532,6 +533,19 @@ export const pickMutation = onCall({ maxInstances: 10 }, async (request) => {
       // round (otherwise the deck would re-randomize between rounds).
       pick.target = String(Math.floor(Math.random() * 0xFFFFFFFF) || 1);
     }
+
+    // Hard floor: never let a pick shrink this player's deck below a playable
+    // round (MIN_DECK_SIZE). Guards against stacked shrinks and stale/forged
+    // mutationOptions that the option roller would otherwise have excluded.
+    const ownedPicks = game.mutations?.[uid] ?? [];
+    const resultingDeck = applyMutationsToDeck(createDeck(), [...ownedPicks, pick] as MutationPick[]);
+    if (resultingDeck.length < MIN_DECK_SIZE) {
+      throw new HttpsError(
+        'failed-precondition',
+        'That mutation would shrink your deck too far to play a round.',
+      );
+    }
+
     picks[uid] = pick;
 
     tx.update(gameRef, {
