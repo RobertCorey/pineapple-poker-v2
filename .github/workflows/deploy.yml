@@ -15,7 +15,7 @@ jobs:
       firebase: ${{ steps.check.outputs.firebase }}
       dealer: ${{ steps.check.outputs.dealer }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 2
 
@@ -33,9 +33,9 @@ jobs:
     if: needs.changes.outputs.firebase == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -54,7 +54,11 @@ jobs:
           echo "GOOGLE_APPLICATION_CREDENTIALS=/tmp/sa-key.json" >> "$GITHUB_ENV"
 
       - name: Deploy to Firebase
-        run: npx firebase-tools deploy --project pineapple-poker-8f3
+        # --force lets CI prune functions deleted from source non-interactively.
+        # NOTE: this means removing a function from source WILL delete it from
+        # production on the next deploy. Function deletions are an explicit,
+        # reviewed event in this repo, so that is intended.
+        run: npx firebase-tools deploy --project pineapple-poker-8f3 --force
 
       - name: Clean up credentials
         if: always()
@@ -65,9 +69,9 @@ jobs:
     if: needs.changes.outputs.dealer == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -140,9 +144,9 @@ jobs:
     if: ${{ !failure() && !cancelled() }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
