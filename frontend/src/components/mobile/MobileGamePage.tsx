@@ -278,7 +278,7 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
         <div className="flex items-center gap-2">
           <span className="text-green-400 font-bold tracking-wider">{roomId}</span>
           {showTimer && (
-            <span className={`font-bold ${countdown < 10 ? 'text-red-400' : 'text-yellow-400'}`}>
+            <span className={`font-bold ${countdown <= 10 ? 'text-red-400 animate-pulse text-sm' : 'text-yellow-400'}`}>
               {countdown}s
             </span>
           )}
@@ -384,6 +384,14 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
               />
             )}
           </div>
+
+          {/* Low-time warning — placement is easy to lose track of; make the
+              impending auto-place unmissable when the player still has cards. */}
+          {showTimer && countdown > 0 && countdown <= 10 && !isObserver && hand.length > 0 && !submitting && (
+            <div className="bg-red-700 text-white text-center text-xs font-bold py-1 animate-pulse flex-shrink-0">
+              ⏰ {countdown}s left — place your cards!
+            </div>
+          )}
 
           {/* Hand area */}
           <MobileHandArea
