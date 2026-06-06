@@ -175,6 +175,15 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
     return board;
   })();
 
+  // Cards placed this turn but not yet submitted are takeable-back. Expose the
+  // count per row so PlayerBoard can mark them tap-to-undo.
+  const canUndo = showOptimisticPlacements && !submitting;
+  const pendingByRow = {
+    top: canUndo ? placements.filter((p) => p.row === 'top').length : 0,
+    middle: canUndo ? placements.filter((p) => p.row === 'middle').length : 0,
+    bottom: canUndo ? placements.filter((p) => p.row === 'bottom').length : 0,
+  };
+
   const handleRowClick = async (row: Row) => {
     if (selectedIndex === null || submitting) return;
     // selectedIndex is a position into `availableHand`
@@ -220,6 +229,17 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
         setSubmitting(false);
       }
     }
+  };
+
+  // Take a just-placed (not-yet-submitted) card back to hand.
+  const handleUndoCard = (row: Row, pendingIndex: number) => {
+    if (submitting) return;
+    const inRow = placements.filter((p) => p.row === row);
+    const target = inRow[pendingIndex];
+    if (!target) return;
+    setPlacements(placements.filter((p) => p !== target));
+    setSelectedIndex(null);
+    SoundEngine.get().playCardPlace();
   };
 
   const handleLeave = async () => {
@@ -356,6 +376,8 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
                 isCurrentPlayer
                 onRowClick={selectedIndex !== null && !submitting ? handleRowClick : undefined}
                 hasCardSelected={selectedIndex !== null && !submitting}
+                pendingByRow={pendingByRow}
+                onUndoCard={canUndo ? handleUndoCard : undefined}
                 cardWidthPx={playerCardW}
                 score={currentPlayer.score}
                 rank={playerRank}
