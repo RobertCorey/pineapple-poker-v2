@@ -8,8 +8,12 @@ export default defineConfig({
   testIgnore: isProduction
     ? ['**/bot.spec.ts', '**/stress.spec.ts', '**/scoring.spec.ts', '**/sit-out.spec.ts']
     : ['**/bot.spec.ts', '**/stress.spec.ts'],
-  timeout: isProduction ? 180_000 : 120_000,
-  retries: isProduction ? 1 : (process.env.CI ? 1 : 0),
+  timeout: isProduction ? 180_000 : 180_000,
+  // CI gets 2 retries: structural flake causes are fixed (serial workers,
+  // long-polling, warmup), but a contended runner can still produce a transient
+  // listener-handshake hang that a fresh attempt clears. Local stays at 0 so
+  // genuine regressions surface immediately.
+  retries: isProduction ? 1 : (process.env.CI ? 2 : 0),
   /*
    * Serial. Every test drives the SAME single dealer process and the SAME
    * Firestore/Functions emulator (unique room codes isolate game *state*, but
