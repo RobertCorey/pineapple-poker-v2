@@ -89,7 +89,7 @@ export function MobileHandArea({
             {selectedIndex !== null ? 'Tap a row to place' : 'Tap a card to select'}
             {placements.length > 0 && (
               <span className="ml-1 text-gray-600">
-                ({placements.length}/{requiredPlacements})
+                ({placements.length}/{requiredPlacements}) · tap a placed card to undo
               </span>
             )}
           </>

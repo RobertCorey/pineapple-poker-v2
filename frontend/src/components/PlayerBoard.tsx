@@ -66,6 +66,12 @@ interface PlayerBoardProps {
   score?: number;
   disconnected?: boolean;
   rank?: number;
+  /** Count of trailing cards in each row that are optimistic (placed this turn,
+   *  not yet submitted) and therefore takeable-back. */
+  pendingByRow?: { top: number; middle: number; bottom: number };
+  /** Tap a pending card to return it to hand. pendingIndex is its position
+   *  among that row's pending cards (0 = first placed there this turn). */
+  onUndoCard?: (row: Row, pendingIndex: number) => void;
 }
 
 function RowOverlay({ label, cardWidthPx }: { label: string; cardWidthPx: number }) {
@@ -81,11 +87,46 @@ function RowOverlay({ label, cardWidthPx }: { label: string; cardWidthPx: number
 
 export function PlayerBoard({
   board, playerName, fouled, isCurrentPlayer, onRowClick, hasCardSelected,
-  cardWidthPx, score, disconnected, rank,
+  cardWidthPx, score, disconnected, rank, pendingByRow, onUndoCard,
 }: PlayerBoardProps) {
   const topSlots = padRow(board.top, 3);
   const middleSlots = padRow(board.middle, 5);
   const bottomSlots = padRow(board.bottom, 5);
+
+  const pending = pendingByRow ?? { top: 0, middle: 0, bottom: 0 };
+
+  // Render one slot: a takeable-back pending card (tap to return to hand), or a
+  // plain CardSlot. The trailing `pending[rowKey]` cards of a row are pending.
+  const renderSlot = (
+    rowKey: 'top' | 'middle' | 'bottom',
+    rowEnum: Row,
+    cards: Card[],
+    card: Card | null,
+    i: number,
+    key: string,
+  ) => {
+    const committed = cards.length - pending[rowKey];
+    const undoable = !!onUndoCard && card !== null && i >= committed && i < cards.length;
+    if (!undoable) return <CardSlot key={key} card={card} widthPx={cardWidthPx} />;
+    return (
+      <div
+        key={key}
+        onClick={(e) => { e.stopPropagation(); onUndoCard!(rowEnum, i - committed); }}
+        title="Tap to take this card back"
+        className="relative cursor-pointer hover:brightness-110 active:scale-95 transition-transform"
+        data-testid={`pending-${rowKey}-${i - committed}`}
+      >
+        <CardComponent card={card} widthPx={cardWidthPx} />
+        <span className="absolute inset-0 rounded ring-2 ring-yellow-400/80 pointer-events-none" />
+        <span
+          className="absolute -top-1 -right-1 bg-yellow-400 text-black rounded-full font-black flex items-center justify-center pointer-events-none leading-none"
+          style={{ width: Math.max(10, Math.round(cardWidthPx * 0.34)), height: Math.max(10, Math.round(cardWidthPx * 0.34)), fontSize: Math.max(8, Math.round(cardWidthPx * 0.26)) }}
+        >
+          ↶
+        </span>
+      </div>
+    );
+  };
 
   const topHasSpace = board.top.length < 3;
   const middleHasSpace = board.middle.length < 5;
@@ -140,9 +181,7 @@ export function PlayerBoard({
         style={{ gap, ...(fouled ? { transform: 'rotate(-2deg)' } : {}) }}
       >
         <div style={{ width: cardWidthPx }} />
-        {topSlots.map((card, i) => (
-          <CardSlot key={`top-${i}`} card={card} widthPx={cardWidthPx} />
-        ))}
+        {topSlots.map((card, i) => renderSlot('top', Row.Top, board.top, card, i, `top-${i}`))}
         <div style={{ width: cardWidthPx }} />
         {topLabel && <RowOverlay label={topLabel} cardWidthPx={cardWidthPx} />}
       </div>
@@ -154,9 +193,7 @@ export function PlayerBoard({
         className={`${rowClass(!!rowClickable(middleHasSpace))} mb-1`}
         style={{ gap, ...(fouled ? { transform: 'rotate(1deg)' } : {}) }}
       >
-        {middleSlots.map((card, i) => (
-          <CardSlot key={`mid-${i}`} card={card} widthPx={cardWidthPx} />
-        ))}
+        {middleSlots.map((card, i) => renderSlot('middle', Row.Middle, board.middle, card, i, `mid-${i}`))}
         {middleLabel && <RowOverlay label={middleLabel} cardWidthPx={cardWidthPx} />}
       </div>
 
@@ -167,9 +204,7 @@ export function PlayerBoard({
         className={rowClass(!!rowClickable(bottomHasSpace))}
         style={{ gap, ...(fouled ? { transform: 'rotate(3deg)' } : {}) }}
       >
-        {bottomSlots.map((card, i) => (
-          <CardSlot key={`bot-${i}`} card={card} widthPx={cardWidthPx} />
-        ))}
+        {bottomSlots.map((card, i) => renderSlot('bottom', Row.Bottom, board.bottom, card, i, `bot-${i}`))}
         {bottomLabel && <RowOverlay label={bottomLabel} cardWidthPx={cardWidthPx} />}
       </div>
 

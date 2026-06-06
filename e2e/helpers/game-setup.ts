@@ -1,4 +1,4 @@
-import { expect, type Browser, type BrowserContext, type Page } from '@playwright/test';
+import { expect, type Browser, type BrowserContext, type Locator, type Page } from '@playwright/test';
 import { T_JOIN } from './timeouts';
 import { placeInitialDeal, placeStreet } from './placement';
 
@@ -6,6 +6,22 @@ const CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 export function generateRoomCode(): string {
   return Array.from({ length: 6 }, () => CHARS[Math.floor(Math.random() * CHARS.length)]).join('');
+}
+
+/**
+ * Wait for a post-join element, self-healing the known Firestore-emulator flake:
+ * occasionally the realtime listener's WebChannel/long-poll hangs and never
+ * delivers the first snapshot, so the UI stalls even though the join SUCCEEDED
+ * server-side. A single page reload re-establishes the listener and recovers
+ * deterministically — much better than a blanket test retry.
+ */
+export async function waitForJoin(page: Page, target: Locator): Promise<void> {
+  try {
+    await target.waitFor({ timeout: 12_000 });
+  } catch {
+    await page.reload();
+    await target.waitFor({ timeout: T_JOIN });
+  }
 }
 
 export interface TwoPlayerGame {
@@ -37,11 +53,11 @@ export async function setupTwoPlayerGame(browser: Browser, opts?: { timeout?: nu
 
   await alice.getByTestId('name-input').fill('Alice');
   await alice.getByTestId('join-button').click();
-  await alice.getByTestId('start-match-button').waitFor({ timeout: T_JOIN });
+  await waitForJoin(alice, alice.getByTestId('start-match-button'));
 
   await bob.getByTestId('name-input').fill('Bob');
   await bob.getByTestId('join-button').click();
-  await expect(bob.getByText('Waiting for host to start')).toBeVisible({ timeout: T_JOIN });
+  await waitForJoin(bob, bob.getByText('Waiting for host to start'));
 
   return {
     alice,
