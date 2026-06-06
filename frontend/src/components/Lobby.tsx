@@ -160,30 +160,54 @@ export function Lobby({ uid, displayName, setDisplayName, signIn, gameState, isI
                 <span className="text-gray-400">{turnTimeoutMs / 1000}s</span>
               )}
             </div>
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-gray-400">Game Mode</span>
+            <div className="text-xs mt-3">
+              <div className="text-gray-400 mb-1">Game Mode</div>
               {isHost ? (
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <span className={runMode ? 'text-purple-300' : 'text-gray-500'}>
-                    {runMode ? 'Pineapple Run' : 'Classic'}
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={runMode}
-                    onChange={(e) => setRunMode(e.target.checked)}
-                    className="w-4 h-4"
-                  />
-                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setRunMode(false)}
+                    className={`py-2 px-2 border text-xs font-bold transition-colors ${
+                      !runMode
+                        ? 'border-green-500 bg-green-900/40 text-green-200'
+                        : 'border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-500'
+                    }`}
+                  >
+                    <div>Classic</div>
+                    <div className="text-[9px] font-normal text-gray-400 mt-0.5">
+                      3 rounds, no charms
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRunMode(true)}
+                    className={`py-2 px-2 border text-xs font-bold transition-colors ${
+                      runMode
+                        ? 'border-purple-400 bg-purple-900/40 text-purple-200'
+                        : 'border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-500'
+                    }`}
+                  >
+                    <div>Pineapple Run</div>
+                    <div className="text-[9px] font-normal text-gray-400 mt-0.5">
+                      5 rounds, draft charms
+                    </div>
+                  </button>
+                </div>
               ) : (
-                <span className="text-gray-400">Classic</span>
+                <div className="text-gray-400">Host picks mode at start</div>
+              )}
+              {isHost && runMode && (
+                <p className="text-[10px] text-purple-400 mt-2 leading-relaxed">
+                  Roguelike mode. 5 rounds. Between each round, both players draft
+                  a charm (bonus points) and a deck mutation that reshape the run.
+                </p>
+              )}
+              {isHost && !runMode && (
+                <p className="text-[10px] text-gray-500 mt-2 leading-relaxed">
+                  Standard 3-round match with normal scoring.
+                </p>
               )}
             </div>
-            {isHost && runMode && (
-              <p className="text-[10px] text-purple-400 mt-2 leading-relaxed">
-                Roguelike mode. 5 rounds. Between each round, pick a charm
-                AND a deck mutation that reshape the rest of the run.
-              </p>
-            )}
           </div>
 
           <div className="space-y-2">
