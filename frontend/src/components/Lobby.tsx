@@ -5,6 +5,7 @@ import { joinGame, leaveGame, startMatch, addBot, removeBot } from '../api.ts';
 import { trackEvent } from '../firebase.ts';
 import { useToast } from '../hooks/useToast.ts';
 import { Toast } from './Toast.tsx';
+import { RulesModal } from './RulesModal.tsx';
 
 interface LobbyProps {
   uid: string;
@@ -23,6 +24,7 @@ export function Lobby({ uid, displayName, setDisplayName, signIn, gameState, isI
   const [starting, setStarting] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [addingBot, setAddingBot] = useState(false);
+  const [showRules, setShowRules] = useState(false);
   const { message: toast, showToast } = useToast();
 
   // Match settings — host can configure before starting
@@ -241,8 +243,16 @@ export function Lobby({ uid, displayName, setDisplayName, signIn, gameState, isI
             >
               {leaving ? '...' : 'Leave'}
             </button>
+            <button
+              onClick={() => setShowRules(true)}
+              data-testid="how-to-play"
+              className="w-full text-center text-xs text-gray-500 hover:text-gray-300 underline pt-1"
+            >
+              How to play
+            </button>
           </div>
         </div>
+        {showRules && <RulesModal onClose={() => setShowRules(false)} />}
         <Toast message={toast} />
       </div>
     );
