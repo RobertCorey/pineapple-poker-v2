@@ -6,7 +6,6 @@ import { usePlayerHand } from './hooks/usePlayerHand.ts';
 import { RoomSelector } from './components/RoomSelector.tsx';
 import { Lobby } from './components/Lobby.tsx';
 import { MobileGamePage } from './components/mobile/MobileGamePage.tsx';
-import { CharmPickPage } from './components/CharmPickPage.tsx';
 import { GamePhase } from '@shared/core/types';
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
@@ -119,18 +118,6 @@ function App() {
         signIn={signIn}
         gameState={gameState}
         isInGame={!!isInGame}
-        roomId={roomId}
-        onLeaveRoom={handleLeaveRoom}
-      />
-    );
-  }
-
-  // Roguelike charm-pick screen between rounds
-  if (gameState?.phase === GamePhase.CharmPick) {
-    return (
-      <CharmPickPage
-        gameState={gameState}
-        uid={user.uid}
         roomId={roomId}
         onLeaveRoom={handleLeaveRoom}
       />

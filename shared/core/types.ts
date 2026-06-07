@@ -126,10 +126,11 @@ export interface MatchSettings {
   interRoundDelayMs: number;   // delay between rounds before auto-starting next
 }
 
-/** Charm = roguelike modifier picked between rounds in run mode. */
+// Legacy run-mode types (feature removed). Kept so old Firestore docs parse.
+/** Charm = roguelike modifier picked between rounds. */
 export type CharmId = string;
 
-/** Deck mutation = run-defining permanent change to a player's deck. */
+/** Deck mutation = permanent change to a player's deck. */
 export type MutationId = string;
 
 /** A picked mutation, optionally with a sub-target (suit, rank, etc.). */
@@ -145,14 +146,16 @@ export interface GameState {
   playerOrder: string[];   // uid list for turn order
   street: number;          // 1-5
   round: number;           // 1-based current round (0 = pre-match lobby)
-  totalRounds: number;     // rounds per match (3 normal, 5 in run mode)
+  totalRounds: number;     // rounds per match (always ROUNDS_PER_MATCH)
   hostUid: string;         // uid of match creator
   settings: MatchSettings; // configurable match settings
   roundResults?: Record<string, RoundResult>;
   createdAt: number;
   updatedAt: number;
   phaseDeadline: number | null;  // Unix timestamp when phase expires
-  // ---- Run mode (roguelike deckbuilder) ----
+  // ---- Legacy run-mode fields (feature removed) ----
+  // Kept as optional so old Firestore docs written while "Pineapple Run" was
+  // live still parse. Nothing writes these anymore; playAgain scrubs them.
   runMode?: boolean;
   charms?: Record<string, CharmId[]>;        // each player's owned charms
   charmOptions?: CharmId[] | null;           // 3 charms offered this pick (shared)

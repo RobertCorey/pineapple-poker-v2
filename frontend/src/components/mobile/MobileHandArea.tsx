@@ -8,8 +8,7 @@ import type { Placement } from '../../utils/card-utils.ts';
 interface MobileHandAreaProps {
   hand: Card[];
   /** Cards still in hand, paired with their stable index in the original
-   *  dealt hand. The handIndex is used as the React key to avoid collisions
-   *  when run-mode mutations produce duplicate (rank, suit) cards. */
+   *  dealt hand. The handIndex is used as the React key. */
   availableHand: Array<{ card: Card; handIndex: number }>;
   gameState: GameState;
   uid: string;

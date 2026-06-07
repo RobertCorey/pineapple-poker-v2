@@ -74,13 +74,6 @@ export function RulesModal({ onClose }: RulesModalProps) {
             <p><b>Foul:</b> a mis-ordered board (or running out of time) loses
             <b> −6</b> to each opponent, and your royalties don't count.</p>
           </Section>
-
-          <Section title="🍍 Pineapple Run (roguelike mode)">
-            <p>A 5-round run. Between rounds you draft a <b className="text-purple-300">Charm</b>
-            {' '}(a permanent score bonus) and a <b className="text-amber-300">Deck Mutation</b>
-            {' '}(permanently reshapes your deck). They stack across the run — build something
-            broken.</p>
-          </Section>
         </div>
 
         <div className="px-4 py-2 border-t border-gray-700 flex-shrink-0">
