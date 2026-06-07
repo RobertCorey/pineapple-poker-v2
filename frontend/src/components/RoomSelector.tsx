@@ -4,6 +4,7 @@ import { trackEvent } from '../firebase.ts';
 import { useToast } from '../hooks/useToast.ts';
 import { generateRoomCode } from '../utils/roomCode.ts';
 import { Toast } from './Toast.tsx';
+import { RulesModal } from './RulesModal.tsx';
 
 interface RoomSelectorProps {
   displayName: string;
@@ -17,6 +18,7 @@ export function RoomSelector({ displayName, setDisplayName, signIn, onRoomJoined
   const [roomCodeInput, setRoomCodeInput] = useState('');
   const [creating, setCreating] = useState(false);
   const [joining, setJoining] = useState(false);
+  const [showRules, setShowRules] = useState(false);
   const { message: toast, showToast } = useToast();
 
   const handleCreate = async () => {
@@ -114,7 +116,16 @@ export function RoomSelector({ displayName, setDisplayName, signIn, onRoomJoined
             </button>
           </div>
         </div>
+
+        <button
+          onClick={() => setShowRules(true)}
+          data-testid="how-to-play"
+          className="w-full mt-4 text-center text-xs text-gray-500 hover:text-gray-300 underline"
+        >
+          How to play
+        </button>
       </div>
+      {showRules && <RulesModal onClose={() => setShowRules(false)} />}
       <Toast message={toast} />
     </div>
   );
