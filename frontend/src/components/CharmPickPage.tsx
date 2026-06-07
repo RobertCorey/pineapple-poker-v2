@@ -288,6 +288,7 @@ export function CharmPickPage({ gameState, uid, roomId, onLeaveRoom }: CharmPick
                   return (
                     <button
                       key={cid}
+                      data-testid={`charm-option-${cid}`}
                       onClick={() => handlePickCharm(cid)}
                       disabled={pickingCharm || !!myCharmPick}
                       className={`w-full text-left border p-2 transition-colors ${
@@ -331,6 +332,7 @@ export function CharmPickPage({ gameState, uid, roomId, onLeaveRoom }: CharmPick
                   return (
                     <div key={mid}>
                       <button
+                        data-testid={`mutation-option-${mid}`}
                         onClick={() => handlePickMutation(mid)}
                         disabled={pickingMutation || !!myMutationPick}
                         className={`w-full text-left border p-2 transition-colors ${
@@ -363,6 +365,7 @@ export function CharmPickPage({ gameState, uid, roomId, onLeaveRoom }: CharmPick
                           {SUIT_OPTIONS.map((opt) => (
                             <button
                               key={opt.suit}
+                              data-testid={`suit-${opt.suit}`}
                               onClick={() => handlePickMutation(mid, opt.suit)}
                               disabled={pickingMutation}
                               className={`px-3 py-2 text-xl ${opt.color} bg-gray-800 border border-gray-700 hover:border-amber-500 active:bg-amber-900/30 rounded`}
