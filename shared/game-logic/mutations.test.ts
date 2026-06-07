@@ -24,6 +24,11 @@ describe('deckSizeAfter (exact stacked sizing)', () => {
     // every card is now a heart; purging hearts removes all 52 -> 0 in the worst case
     expect(deckSizeAfter(owned, 'suit_purge')).toBe(0);
   });
+
+  it('sizes the new removal mutations correctly', () => {
+    expect(deckSizeAfter([], 'bottom_heavy')).toBe(36); // ranks 2-10 × 4 suits
+    expect(deckSizeAfter([], 'royal_court')).toBe(24); // ranks 9-A × 4 suits
+  });
 });
 
 describe('rollMutationOptions (deck-size floor, no unsafe fallback)', () => {

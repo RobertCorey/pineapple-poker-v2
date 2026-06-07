@@ -34,3 +34,34 @@ describe('charms: foul shield', () => {
     expect(foulShieldReduction(['pair_pride'])).toBe(0);
   });
 });
+
+describe('charms: new run-mode content', () => {
+  it('full_boat awards 25 for a full house row', () => {
+    const board: Board = {
+      top: [],
+      middle: [],
+      bottom: [c(Rank.Seven, Suit.Spades), c(Rank.Seven, Suit.Hearts), c(Rank.Seven, Suit.Diamonds), c(Rank.King, Suit.Spades), c(Rank.King, Suit.Hearts)],
+    };
+    expect(CHARMS.full_boat.bonus(board)).toBe(25);
+  });
+
+  it('quad_squad awards 40 for a four-of-a-kind row, full_boat also fires', () => {
+    const board: Board = {
+      top: [],
+      middle: [],
+      bottom: [c(Rank.Nine, Suit.Spades), c(Rank.Nine, Suit.Hearts), c(Rank.Nine, Suit.Diamonds), c(Rank.Nine, Suit.Clubs), c(Rank.Two, Suit.Spades)],
+    };
+    expect(CHARMS.quad_squad.bonus(board)).toBe(40);
+    expect(CHARMS.full_boat.bonus(board)).toBe(25); // quads >= full house
+  });
+
+  it('low_baller awards +2 per card ranked 5 or lower', () => {
+    const board: Board = {
+      top: [c(Rank.Two, Suit.Spades), c(Rank.Three, Suit.Hearts), c(Rank.Four, Suit.Diamonds)],
+      middle: [c(Rank.Five, Suit.Spades), c(Rank.Five, Suit.Hearts), c(Rank.King, Suit.Diamonds), c(Rank.Ace, Suit.Spades), c(Rank.Queen, Suit.Clubs)],
+      bottom: [],
+    };
+    // ≤5 cards: 2,3,4,5,5 = 5 → 10
+    expect(CHARMS.low_baller.bonus(board)).toBe(10);
+  });
+});
