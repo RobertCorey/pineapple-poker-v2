@@ -1,6 +1,7 @@
 import type { Card, GameState, PlayerState, Board, RoundResult } from '@shared/core/types';
 import { Suit, Rank, GamePhase } from '@shared/core/types';
 import { ROUNDS_PER_MATCH, DEFAULT_MATCH_SETTINGS } from '@shared/core/constants';
+import { scoreAllPlayers } from '@shared/game-logic/scoring';
 
 // --- Seeded RNG for deterministic card generation ---
 
@@ -157,8 +158,8 @@ export function generateMockGameState(opts: MockOptions): GameState {
     const board = fillBoard(playerDeck, boardCardCount);
     const isFouled = i === 0 ? opts.fouled : false;
 
-    // Generate scores for overlays
-    const score = opts.overlay !== 'none' ? Math.floor(seededRng(300 + i)() * 20 - 10) : 0;
+    // Scores for result screens are derived from the boards below.
+    const score = 0;
 
     players[uid] = {
       uid,
@@ -169,6 +170,16 @@ export function generateMockGameState(opts: MockOptions): GameState {
       fouled: isFouled,
       score,
     };
+  }
+
+  // For result screens, derive scores from the actual boards via the real
+  // scorer so the overlay's numbers are internally consistent (hero, ranking,
+  // and the per-opponent breakdown all add up).
+  if (opts.overlay !== 'none') {
+    const boards = new Map(uids.map((u) => [u, players[u].board]));
+    const fouls = new Map(uids.map((u) => [u, players[u].fouled]));
+    const result = scoreAllPlayers(boards, fouls);
+    for (const ps of result.players) players[ps.uid].score = ps.netScore;
   }
 
   // Generate round results for overlays

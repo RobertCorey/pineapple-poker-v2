@@ -176,6 +176,8 @@ export function Lobby({ uid, displayName, setDisplayName, signIn, gameState, isI
                   <option value={30000}>30s</option>
                   <option value={45000}>45s</option>
                   <option value={60000}>60s</option>
+                  <option value={90000}>90s</option>
+                  <option value={120000}>120s</option>
                 </select>
               ) : (
                 <span className="text-gray-400">{turnTimeoutMs / 1000}s</span>
