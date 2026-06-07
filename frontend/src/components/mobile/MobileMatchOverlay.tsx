@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import type { GameState } from '@shared/core/types';
-import { playAgain } from '../../api.ts';
+import { playAgain, leaveGame } from '../../api.ts';
 import { trackEvent } from '../../firebase.ts';
 import { formatScore } from '../../utils/scoring-display.ts';
 import { SoundEngine } from '../../audio/SoundEngine.ts';
@@ -10,6 +10,7 @@ interface MobileMatchOverlayProps {
   gameState: GameState;
   currentUid: string;
   roomId: string;
+  onLeaveRoom: () => void;
 }
 
 /** Stagger delay before each rank row appears */
@@ -17,8 +18,9 @@ const RANK_STAGGER_MS = 600;
 /** Extra delay before the winner row appears (dramatic pause) */
 const WINNER_EXTRA_DELAY_MS = 800;
 
-export function MobileMatchOverlay({ gameState, currentUid, roomId }: MobileMatchOverlayProps) {
+export function MobileMatchOverlay({ gameState, currentUid, roomId, onLeaveRoom }: MobileMatchOverlayProps) {
   const [restarting, setRestarting] = useState(false);
+  const [leaving, setLeaving] = useState(false);
   const [revealedCount, setRevealedCount] = useState(0);
   const isHost = gameState.hostUid === currentUid;
   const soundPlayedRef = useRef(new Set<number>());
@@ -74,6 +76,18 @@ export function MobileMatchOverlay({ gameState, currentUid, roomId }: MobileMatc
     } catch (err) {
       console.error('Failed to restart:', err);
       setRestarting(false);
+    }
+  };
+
+  const handleLeave = async () => {
+    setLeaving(true);
+    try {
+      await leaveGame({ roomId });
+      trackEvent('leave_game', { roomId });
+      onLeaveRoom();
+    } catch (err) {
+      console.error('Failed to leave:', err);
+      setLeaving(false);
     }
   };
 
@@ -171,9 +185,9 @@ export function MobileMatchOverlay({ gameState, currentUid, roomId }: MobileMatc
           })}
         </div>
 
-        {/* Play Again (only after all revealed) */}
+        {/* Play Again + Leave (only after all revealed) */}
         {allRevealed && (
-          <div className="flex justify-center animate-fade-in">
+          <div className="flex flex-col items-center gap-3 animate-fade-in">
             {isHost ? (
               <button
                 data-testid="play-again-button"
@@ -184,8 +198,18 @@ export function MobileMatchOverlay({ gameState, currentUid, roomId }: MobileMatc
                 {restarting ? '...' : 'Play Again'}
               </button>
             ) : (
-              <span className="text-sm text-gray-500">Waiting for host...</span>
+              <span className="text-sm text-gray-500">Waiting for host to play again...</span>
             )}
+            {/* Everyone can leave — non-hosts were previously stranded here if the
+                host walked away (host-only play-again, no exit). */}
+            <button
+              data-testid="leave-match-button"
+              onClick={handleLeave}
+              disabled={leaving}
+              className="px-6 py-2 text-gray-400 hover:text-white text-xs underline disabled:text-gray-600"
+            >
+              {leaving ? 'Leaving...' : 'Leave game'}
+            </button>
           </div>
         )}
       </div>
