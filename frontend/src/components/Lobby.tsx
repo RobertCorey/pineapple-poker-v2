@@ -88,6 +88,16 @@ export function Lobby({ uid, displayName, setDisplayName, signIn, gameState, isI
     }
   };
 
+  const handleCopyInvite = async () => {
+    const url = `${window.location.origin}/?room=${roomId}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      showToast('Invite link copied!');
+    } catch {
+      showToast(`Share this room code: ${roomId}`);
+    }
+  };
+
   const handleAddBot = async () => {
     setAddingBot(true);
     try {
@@ -116,7 +126,16 @@ export function Lobby({ uid, displayName, setDisplayName, signIn, gameState, isI
         <div className="border border-gray-700 p-6 max-w-sm w-full mx-4">
           <h1 className="text-xl font-bold text-center mb-1">Pineapple Poker</h1>
           <p className="text-gray-500 text-center text-xs mb-1">Match Lobby</p>
-          <p className="text-green-400 text-center text-xs mb-4 tracking-widest">Room: {roomId}</p>
+          <div className="text-center mb-4">
+            <p className="text-green-400 text-xs tracking-widest">Room: {roomId}</p>
+            <button
+              onClick={handleCopyInvite}
+              data-testid="copy-invite"
+              className="mt-1 text-[10px] text-blue-400 hover:text-blue-300 underline"
+            >
+              Copy invite link
+            </button>
+          </div>
 
           <div className="mb-4">
             <div className="text-xs text-gray-500 mb-2">Players ({players.length})</div>
