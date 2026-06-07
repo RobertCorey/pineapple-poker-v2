@@ -1,6 +1,6 @@
 import type { GameState } from '@shared/core/types';
 import { compareRows } from '@shared/game-logic/hand-evaluation';
-import { calculateRoyalties } from '@shared/game-logic/scoring';
+import { scorePairwise } from '@shared/game-logic/scoring';
 import { formatScore } from '../../utils/scoring-display.ts';
 import { useScoreCountUp } from '../../hooks/useScoreCountUp.ts';
 
@@ -37,9 +37,6 @@ export function MobileRoundOverlay({ gameState, currentUid }: MobileRoundOverlay
   const opponents = gameState.playerOrder.filter(
     (u) => u !== currentUid && gameState.players[u],
   );
-
-  const boardComplete = (b: { top: unknown[]; middle: unknown[]; bottom: unknown[] }) =>
-    b.top.length === 3 && b.middle.length === 5 && b.bottom.length === 5;
 
   return (
     <div
@@ -105,30 +102,46 @@ export function MobileRoundOverlay({ gameState, currentUid }: MobileRoundOverlay
           {opponents.map((ouid) => {
             const opp = gameState.players[ouid];
             const oFouled = roundResults[ouid]?.fouled ?? false;
-            const playable = !myFouled && !oFouled && boardComplete(me.board) && boardComplete(opp.board);
+            // Use the SAME scorer the server used, so the parts always add up.
+            const pr = scorePairwise(currentUid, myFouled, me.board, ouid, oFouled, opp.board);
+            const fouled = myFouled || oFouled;
             return (
               <div key={ouid} className="flex items-center justify-between bg-gray-800/40 rounded px-2 py-1 gap-2">
-                <span className="text-gray-400 truncate">vs {opp.displayName}</span>
-                {playable ? (
-                  <span className="flex items-center gap-1 flex-shrink-0">
-                    <RowChip label="T" result={compareRows(me.board.top, opp.board.top, true)} />
-                    <RowChip label="M" result={compareRows(me.board.middle, opp.board.middle, false)} />
-                    <RowChip label="B" result={compareRows(me.board.bottom, opp.board.bottom, false)} />
-                    {(() => {
-                      const roy = calculateRoyalties(me.board).total - calculateRoyalties(opp.board).total;
-                      return roy !== 0 ? (
-                        <span className={roy > 0 ? 'text-green-300' : 'text-red-300'}>roy {formatScore(roy)}</span>
-                      ) : null;
-                    })()}
+                <span className="text-gray-400 truncate min-w-0">vs {opp.displayName}</span>
+                <span className="flex items-center gap-1.5 flex-shrink-0">
+                  {fouled ? (
+                    <span className="text-gray-500">{myFouled ? 'you fouled' : 'they fouled'}</span>
+                  ) : (
+                    <>
+                      <RowChip label="T" result={compareRows(me.board.top, opp.board.top, true)} />
+                      <RowChip label="M" result={compareRows(me.board.middle, opp.board.middle, false)} />
+                      <RowChip label="B" result={compareRows(me.board.bottom, opp.board.bottom, false)} />
+                      {pr.scoopBonus !== 0 && (
+                        <span className="text-yellow-300">scoop {formatScore(pr.scoopBonus)}</span>
+                      )}
+                      {pr.royalties !== 0 && (
+                        <span className={pr.royalties > 0 ? 'text-green-300' : 'text-red-300'}>
+                          roy {formatScore(pr.royalties)}
+                        </span>
+                      )}
+                    </>
+                  )}
+                  <span
+                    className={`font-bold tabular-nums ${
+                      pr.total > 0 ? 'text-green-300' : pr.total < 0 ? 'text-red-300' : 'text-gray-400'
+                    }`}
+                  >
+                    = {formatScore(pr.total)}
                   </span>
-                ) : (
-                  <span className="text-gray-500 flex-shrink-0">
-                    {myFouled ? 'you fouled' : oFouled ? `${opp.displayName} fouled` : '–'}
-                  </span>
-                )}
+                </span>
               </div>
             );
           })}
+          {opponents.length > 1 && (
+            <div className="text-right text-[10px] text-gray-500 pt-0.5">
+              total = your round {formatScore(myRoundScore)}
+            </div>
+          )}
         </div>
       )}
 
