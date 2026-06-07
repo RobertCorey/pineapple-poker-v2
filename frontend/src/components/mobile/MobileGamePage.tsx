@@ -422,6 +422,7 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
           gameState={gameState}
           currentUid={uid}
           roomId={roomId}
+          onLeaveRoom={onLeaveRoom}
         />
       )}
 
