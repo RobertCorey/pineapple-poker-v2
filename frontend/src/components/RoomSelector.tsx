@@ -1,8 +1,11 @@
 import { useState } from 'react';
+import type { Card } from '@shared/core/types';
+import { Suit, Rank } from '@shared/core/types';
 import { joinGame } from '../api.ts';
 import { trackEvent } from '../firebase.ts';
 import { useToast } from '../hooks/useToast.ts';
 import { generateRoomCode } from '../utils/roomCode.ts';
+import { CardComponent } from './CardComponent.tsx';
 import { Toast } from './Toast.tsx';
 import { RulesModal } from './RulesModal.tsx';
 
@@ -11,6 +14,44 @@ interface RoomSelectorProps {
   setDisplayName: (name: string) => void;
   signIn: () => Promise<void>;
   onRoomJoined: (roomId: string) => void;
+}
+
+/** Decorative broadway hand for the hero — shows off the four-color deck. */
+const HERO_CARDS: Card[] = [
+  { rank: Rank.Ten, suit: Suit.Spades },
+  { rank: Rank.Jack, suit: Suit.Clubs },
+  { rank: Rank.Queen, suit: Suit.Diamonds },
+  { rank: Rank.King, suit: Suit.Hearts },
+  { rank: Rank.Ace, suit: Suit.Spades },
+];
+
+/** A fanned spread of cards that floats gently above the title. */
+function HeroFan() {
+  const n = HERO_CARDS.length;
+  return (
+    <div className="lp-float flex justify-center items-end h-28 mb-2" aria-hidden="true">
+      {HERO_CARDS.map((card, i) => {
+        const mid = (n - 1) / 2;
+        const offset = i - mid;
+        const rotate = offset * 9; // degrees
+        const lift = Math.abs(offset) * 7; // outer cards sit lower
+        return (
+          <div
+            key={i}
+            className="lp-fade-up"
+            style={{
+              transform: `rotate(${rotate}deg) translateY(${lift}px)`,
+              marginLeft: i === 0 ? 0 : -16,
+              animationDelay: `${i * 70}ms`,
+              filter: 'drop-shadow(0 6px 10px rgba(0,0,0,0.45))',
+            }}
+          >
+            <CardComponent card={card} widthPx={50} />
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 export function RoomSelector({ displayName, setDisplayName, signIn, onRoomJoined }: RoomSelectorProps) {
@@ -58,40 +99,73 @@ export function RoomSelector({ displayName, setDisplayName, signIn, onRoomJoined
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center font-mono">
-      <div className="border border-gray-700 p-6 max-w-sm w-full mx-4">
-        <h1 className="text-xl font-bold text-center mb-1">Pineapple Poker</h1>
-        <p className="text-gray-500 text-center text-xs mb-4">Open Face Chinese</p>
+    <div className="relative min-h-[100dvh] overflow-hidden bg-gray-950 text-white font-mono flex flex-col items-center justify-center px-4 py-8">
+      {/* Poker-felt glow backdrop */}
+      <div
+        aria-hidden="true"
+        className="lp-glow pointer-events-none absolute inset-0"
+        style={{
+          background:
+            'radial-gradient(60% 50% at 50% 38%, rgba(21,128,61,0.30) 0%, rgba(21,128,61,0.10) 45%, transparent 75%)',
+        }}
+      />
 
-        <div className="space-y-3">
-          <div>
-            <label htmlFor="name" className="block text-xs text-gray-500 mb-1">
-              Display Name
-            </label>
-            <input
-              id="name"
-              data-testid="name-input"
-              type="text"
-              value={nameInput}
-              onChange={(e) => setNameInput(e.target.value)}
-              placeholder="Enter your name"
-              maxLength={20}
-              className="w-full px-3 py-2 bg-gray-800 border border-gray-600 text-white placeholder-gray-500 focus:outline-none focus:border-green-500 text-sm"
-            />
+      <main className="relative w-full max-w-sm">
+        {/* ---- Hero ---- */}
+        <div className="text-center mb-6">
+          <HeroFan />
+          <h1 className="lp-fade-up text-3xl font-black tracking-tight" style={{ animationDelay: '120ms' }}>
+            <span aria-hidden="true">🍍 </span>
+            <span className="text-green-400">PINEAPPLE</span>{' '}
+            <span className="text-white">POKER</span>
+          </h1>
+          <p className="lp-fade-up text-gray-400 text-sm mt-2 leading-relaxed" style={{ animationDelay: '200ms' }}>
+            Open-Face Chinese. Build three winning rows,
+            beat the table — live with friends.
+          </p>
+          <div
+            className="lp-fade-up flex items-center justify-center gap-2 text-[11px] text-gray-500 mt-3"
+            style={{ animationDelay: '260ms' }}
+          >
+            <span className="px-2 py-0.5 rounded-full border border-gray-700 bg-gray-900/60">2–8 players</span>
+            <span className="px-2 py-0.5 rounded-full border border-gray-700 bg-gray-900/60">real-time</span>
+            <span className="px-2 py-0.5 rounded-full border border-gray-700 bg-gray-900/60">no signup</span>
           </div>
+        </div>
+
+        {/* ---- Action card ---- */}
+        <div
+          className="lp-fade-up rounded-xl border border-gray-700/80 bg-gray-900/70 backdrop-blur p-5 shadow-xl shadow-black/40"
+          style={{ animationDelay: '320ms' }}
+        >
+          <label htmlFor="name" className="block text-xs text-gray-500 mb-1">
+            Your name
+          </label>
+          <input
+            id="name"
+            data-testid="name-input"
+            type="text"
+            value={nameInput}
+            onChange={(e) => setNameInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+            placeholder="Enter your name"
+            maxLength={20}
+            className="w-full px-3 py-2.5 rounded-lg bg-gray-800 border border-gray-600 text-white placeholder-gray-500 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/40 text-sm"
+          />
 
           <button
             data-testid="create-room-button"
             onClick={handleCreate}
             disabled={!nameInput.trim() || creating}
-            className="w-full py-2 bg-green-700 hover:bg-green-600 disabled:bg-gray-700 disabled:text-gray-500 text-white text-sm font-bold"
+            className="group mt-3 w-full py-3 rounded-lg bg-green-600 hover:bg-green-500 active:bg-green-700 disabled:bg-gray-700 disabled:text-gray-500 text-white text-sm font-bold transition-colors flex items-center justify-center gap-2"
           >
-            {creating ? 'Creating...' : 'Create Room'}
+            <span className="text-base leading-none transition-transform group-hover:translate-x-0.5">▶</span>
+            {creating ? 'Creating table…' : 'Create a table'}
           </button>
 
-          <div className="flex items-center gap-2 text-gray-600 text-xs">
+          <div className="flex items-center gap-3 text-gray-600 text-[11px] my-4">
             <div className="flex-1 border-t border-gray-700" />
-            or join
+            or join with a code
             <div className="flex-1 border-t border-gray-700" />
           </div>
 
@@ -102,29 +176,37 @@ export function RoomSelector({ displayName, setDisplayName, signIn, onRoomJoined
               value={roomCodeInput}
               onChange={(e) => setRoomCodeInput(e.target.value.toUpperCase())}
               onKeyDown={(e) => e.key === 'Enter' && handleJoin()}
-              placeholder="Room code"
+              placeholder="ABC123"
               maxLength={6}
-              className="flex-1 px-3 py-2 bg-gray-800 border border-gray-600 text-white placeholder-gray-500 focus:outline-none focus:border-green-500 text-sm uppercase tracking-widest"
+              className="flex-1 min-w-0 px-3 py-2.5 rounded-lg bg-gray-800 border border-gray-600 text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/40 text-sm uppercase tracking-[0.3em] text-center"
             />
             <button
               data-testid="join-room-button"
               onClick={handleJoin}
               disabled={!nameInput.trim() || !roomCodeInput.trim() || joining}
-              className="px-4 py-2 bg-blue-700 hover:bg-blue-600 disabled:bg-gray-700 disabled:text-gray-500 text-white text-sm font-bold"
+              className="px-5 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 active:bg-blue-700 disabled:bg-gray-700 disabled:text-gray-500 text-white text-sm font-bold transition-colors"
             >
-              {joining ? '...' : 'Join'}
+              {joining ? '…' : 'Join'}
             </button>
           </div>
         </div>
 
-        <button
-          onClick={() => setShowRules(true)}
-          data-testid="how-to-play"
-          className="w-full mt-4 text-center text-xs text-gray-500 hover:text-gray-300 underline"
+        {/* ---- Footer ---- */}
+        <div
+          className="lp-fade-up text-center mt-5"
+          style={{ animationDelay: '400ms' }}
         >
-          How to play
-        </button>
-      </div>
+          <button
+            onClick={() => setShowRules(true)}
+            data-testid="how-to-play"
+            className="text-xs text-gray-500 hover:text-gray-300 underline underline-offset-2"
+          >
+            New here? How to play
+          </button>
+          <p className="text-[10px] text-gray-600 mt-3">Free · plays in your browser · share the link to invite</p>
+        </div>
+      </main>
+
       {showRules && <RulesModal onClose={() => setShowRules(false)} />}
       <Toast message={toast} />
     </div>
