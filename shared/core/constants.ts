@@ -80,7 +80,7 @@ export const ROUNDS_PER_RUN = 5;
 /** Default match settings applied when creating a new room */
 import type { MatchSettings } from './types';
 export const DEFAULT_MATCH_SETTINGS: MatchSettings = {
-  turnTimeoutMs: 30_000,
+  turnTimeoutMs: 90_000,
   interRoundDelayMs: 5_000,
 };
 
