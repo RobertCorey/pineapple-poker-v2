@@ -38,6 +38,13 @@ export function MobileRoundOverlay({ gameState, currentUid }: MobileRoundOverlay
     (u) => u !== currentUid && gameState.players[u],
   );
 
+  // Observers are in `players` but NOT in `playerOrder`, and have an empty
+  // board. The personal hero + per-opponent breakdown both run hand evaluation
+  // on the viewer's board, which throws on empty rows ("Expected 3 cards, got
+  // 0") and crashes the overlay. Render them for active players only; observers
+  // still see the shared ranked list below.
+  const isActivePlayer = gameState.playerOrder.includes(currentUid);
+
   return (
     <div
       data-testid="round-results"
@@ -47,17 +54,19 @@ export function MobileRoundOverlay({ gameState, currentUid }: MobileRoundOverlay
         Round {gameState.round} of {gameState.totalRounds} Complete
       </h2>
 
-      {/* Hero: your round score, animated */}
-      <div className="flex flex-col items-center mb-5">
-        <span className="text-xs text-gray-500 mb-1">Your round score</span>
-        <span
-          className={`text-5xl font-black tabular-nums transition-colors duration-100 ${
-            displayValue > 0 ? 'text-green-400' : displayValue < 0 ? 'text-red-400' : 'text-gray-300'
-          }`}
-        >
-          {formatScore(displayValue)}
-        </span>
-      </div>
+      {/* Hero: your round score, animated (active players only) */}
+      {isActivePlayer && (
+        <div className="flex flex-col items-center mb-5">
+          <span className="text-xs text-gray-500 mb-1">Your round score</span>
+          <span
+            className={`text-5xl font-black tabular-nums transition-colors duration-100 ${
+              displayValue > 0 ? 'text-green-400' : displayValue < 0 ? 'text-red-400' : 'text-gray-300'
+            }`}
+          >
+            {formatScore(displayValue)}
+          </span>
+        </div>
+      )}
 
       {/* Everyone's results — shared reveal */}
       <div className="w-full max-w-[360px] space-y-1 mb-4">
@@ -94,7 +103,7 @@ export function MobileRoundOverlay({ gameState, currentUid }: MobileRoundOverlay
       </div>
 
       {/* Where your points came from — per-opponent row breakdown */}
-      {opponents.length > 0 && me && (
+      {isActivePlayer && opponents.length > 0 && me && (
         <div className="w-full max-w-[360px] text-[11px] space-y-1">
           <div className="text-gray-500 uppercase tracking-wider text-[10px] mb-1">
             Where it came from
