@@ -10,10 +10,11 @@
  */
 import type { Board, Card, CharmId } from '../core/types';
 import { HandRank, ThreeCardHandRank, Rank } from '../core/types';
-import {
-  evaluate3CardHand,
-  evaluate5CardHand,
-} from './hand-evaluation';
+import { evaluate3CardHand } from './hand-evaluation';
+// Run-aware evaluator: charms only apply in Pineapple Run, where a row can be a
+// five-of-a-kind. The core evaluator reads those as High Card and would silently
+// under-credit "X or better" charms.
+import { evaluateRunRow } from './run-evaluation';
 import { isFoul } from './scoring';
 
 export interface CharmDef {
@@ -69,12 +70,12 @@ function topIsPairOrBetter(board: Board): boolean {
 
 function middleIsTwoPairOrBetter(board: Board): boolean {
   if (board.middle.length !== 5) return false;
-  return evaluate5CardHand(board.middle).handRank >= HandRank.TwoPair;
+  return evaluateRunRow(board.middle).handRank >= HandRank.TwoPair;
 }
 
 function bottomIsStraightOrBetter(board: Board): boolean {
   if (board.bottom.length !== 5) return false;
-  return evaluate5CardHand(board.bottom).handRank >= HandRank.Straight;
+  return evaluateRunRow(board.bottom).handRank >= HandRank.Straight;
 }
 
 function rowFlushes(board: Board): number {
@@ -87,11 +88,11 @@ function rowFlushes(board: Board): number {
 function rowStraights(board: Board): number {
   let n = 0;
   if (board.middle.length === 5) {
-    const r = evaluate5CardHand(board.middle).handRank;
+    const r = evaluateRunRow(board.middle).handRank;
     if (r === HandRank.Straight || r === HandRank.StraightFlush) n++;
   }
   if (board.bottom.length === 5) {
-    const r = evaluate5CardHand(board.bottom).handRank;
+    const r = evaluateRunRow(board.bottom).handRank;
     if (r === HandRank.Straight || r === HandRank.StraightFlush) n++;
   }
   return n;
