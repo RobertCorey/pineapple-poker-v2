@@ -2,7 +2,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { z } from 'zod';
-import type { Card, Board, Row, PlayerState, MutationPick } from '../../shared/core/types';
+import type { Card, Board, Row, PlayerState } from '../../shared/core/types';
 import { GamePhase as GP } from '../../shared/core/types';
 import {
   INITIAL_DEAL_COUNT,
@@ -10,13 +10,9 @@ import {
   TOP_ROW_SIZE,
   FIVE_CARD_ROW_SIZE,
   ROUNDS_PER_MATCH,
-  ROUNDS_PER_RUN,
   MAX_PLAYERS,
   DEFAULT_MATCH_SETTINGS,
 } from '../../shared/core/constants';
-import { CHARMS } from '../../shared/game-logic/charms';
-import { MUTATIONS, applyMutationsToDeck, MIN_DECK_SIZE } from '../../shared/game-logic/mutations';
-import { createDeck } from '../../shared/game-logic/deck';
 import { gameDoc, handDoc, deckDoc } from '../../shared/core/firestore-paths';
 import { emptyBoard } from '../../shared/game-logic/board-utils';
 import { parseGameState, CardSchema, MatchSettingsSchema } from '../../shared/core/schemas';
@@ -287,10 +283,9 @@ export const placeCards = onCall({ maxInstances: 10 }, async (request) => {
       }
     }
 
-    // Validate all placed/discarded cards are in hand. Use multiset semantics
-    // because run-mode mutations (Pair Party, Spike, Mono Suit, etc.) can
-    // produce hands with duplicate (rank, suit) pairs — a simple `some()`
-    // check would let a client claim to play more copies than were dealt.
+    // Validate all placed/discarded cards are in hand, using multiset semantics
+    // (count each rank+suit) so a client can never claim to play more copies of
+    // a card than were dealt.
     const allCards: Card[] = [...placements.map((p) => p.card)];
     if (discard) allCards.push(discard);
 
@@ -356,7 +351,6 @@ export const placeCards = onCall({ maxInstances: 10 }, async (request) => {
 
 const StartMatchSchema = RoomIdSchema.extend({
   settings: MatchSettingsSchema.optional(),
-  runMode: z.boolean().optional(),
 });
 
 export const startMatch = onCall({ maxInstances: 10 }, async (request) => {
@@ -369,7 +363,7 @@ export const startMatch = onCall({ maxInstances: 10 }, async (request) => {
   if (!parsed.success) {
     throw new HttpsError('invalid-argument', 'Invalid request data.');
   }
-  const { roomId, settings, runMode } = parsed.data;
+  const { roomId, settings } = parsed.data;
   const gameRef = db().doc(gameDoc(roomId));
 
   await db().runTransaction(async (tx) => {
@@ -403,155 +397,7 @@ export const startMatch = onCall({ maxInstances: 10 }, async (request) => {
     };
     if (settings) baseUpdate.settings = settings;
 
-    if (runMode) {
-      baseUpdate.runMode = true;
-      baseUpdate.totalRounds = ROUNDS_PER_RUN;
-      // Initialise empty charm + mutation collections for each active player
-      const charms: Record<string, string[]> = {};
-      const mutations: Record<string, unknown[]> = {};
-      for (const u of game.playerOrder) {
-        charms[u] = [];
-        mutations[u] = [];
-      }
-      baseUpdate.charms = charms;
-      baseUpdate.mutations = mutations;
-    }
-
     tx.update(gameRef, baseUpdate);
-  });
-
-  return { success: true };
-});
-
-// ---- pickCharm ----
-
-const PickCharmSchema = RoomIdSchema.extend({
-  charmId: z.string().min(1),
-});
-
-export const pickCharm = onCall({ maxInstances: 10 }, async (request) => {
-  const uid = request.auth?.uid;
-  if (!uid) {
-    throw new HttpsError('unauthenticated', 'Must be signed in.');
-  }
-
-  const parsed = PickCharmSchema.safeParse(request.data);
-  if (!parsed.success) {
-    throw new HttpsError('invalid-argument', 'Invalid request data.');
-  }
-  const { roomId, charmId } = parsed.data;
-
-  if (!CHARMS[charmId]) {
-    throw new HttpsError('invalid-argument', 'Unknown charm.');
-  }
-
-  const gameRef = db().doc(gameDoc(roomId));
-
-  await db().runTransaction(async (tx) => {
-    const snap = await tx.get(gameRef);
-    if (!snap.exists) throw new HttpsError('not-found', 'No game exists.');
-
-    const game = parseGameState(snap.data());
-    if (!game.runMode) throw new HttpsError('failed-precondition', 'Not in a run.');
-    if (game.phase !== GP.CharmPick) {
-      throw new HttpsError('failed-precondition', 'Not in charm pick phase.');
-    }
-    if (!game.playerOrder.includes(uid)) {
-      throw new HttpsError('failed-precondition', 'Observers cannot pick charms.');
-    }
-    if (!(game.charmOptions ?? []).includes(charmId)) {
-      throw new HttpsError('invalid-argument', 'Charm is not on offer this pick.');
-    }
-
-    const picks = { ...(game.charmPicks ?? {}) };
-    if (picks[uid]) {
-      throw new HttpsError('failed-precondition', 'You already picked a charm this round.');
-    }
-    picks[uid] = charmId;
-
-    tx.update(gameRef, {
-      charmPicks: picks,
-      updatedAt: Date.now(),
-    });
-  });
-
-  return { success: true };
-});
-
-// ---- pickMutation ----
-
-const PickMutationSchema = RoomIdSchema.extend({
-  mutationId: z.string().min(1),
-  target: z.enum(['c', 'd', 'h', 's']).optional(),
-});
-
-export const pickMutation = onCall({ maxInstances: 10 }, async (request) => {
-  const uid = request.auth?.uid;
-  if (!uid) {
-    throw new HttpsError('unauthenticated', 'Must be signed in.');
-  }
-
-  const parsed = PickMutationSchema.safeParse(request.data);
-  if (!parsed.success) {
-    throw new HttpsError('invalid-argument', 'Invalid request data.');
-  }
-  const { roomId, mutationId, target } = parsed.data;
-
-  const def = MUTATIONS[mutationId];
-  if (!def) throw new HttpsError('invalid-argument', 'Unknown mutation.');
-  if (def.requiresTarget === 'suit' && !target) {
-    throw new HttpsError('invalid-argument', 'This mutation requires a suit target.');
-  }
-
-  const gameRef = db().doc(gameDoc(roomId));
-
-  await db().runTransaction(async (tx) => {
-    const snap = await tx.get(gameRef);
-    if (!snap.exists) throw new HttpsError('not-found', 'No game exists.');
-
-    const game = parseGameState(snap.data());
-    if (!game.runMode) throw new HttpsError('failed-precondition', 'Not in a run.');
-    if (game.phase !== GP.CharmPick) {
-      throw new HttpsError('failed-precondition', 'Not in pick phase.');
-    }
-    if (!game.playerOrder.includes(uid)) {
-      throw new HttpsError('failed-precondition', 'Observers cannot pick mutations.');
-    }
-    if (!(game.mutationOptions ?? []).includes(mutationId)) {
-      throw new HttpsError('invalid-argument', 'Mutation is not on offer this pick.');
-    }
-
-    const picks = { ...(game.mutationPicks ?? {}) };
-    if (picks[uid]) {
-      throw new HttpsError('failed-precondition', 'You already picked a mutation this round.');
-    }
-    const pick: { id: string; target?: string } = { id: mutationId };
-    if (target) {
-      pick.target = target;
-    } else if (mutationId === 'cull') {
-      // Cull: capture random seed at pick time so the cull is the same every
-      // round (otherwise the deck would re-randomize between rounds).
-      pick.target = String(Math.floor(Math.random() * 0xFFFFFFFF) || 1);
-    }
-
-    // Hard floor: never let a pick shrink this player's deck below a playable
-    // round (MIN_DECK_SIZE). Guards against stacked shrinks and stale/forged
-    // mutationOptions that the option roller would otherwise have excluded.
-    const ownedPicks = game.mutations?.[uid] ?? [];
-    const resultingDeck = applyMutationsToDeck(createDeck(), [...ownedPicks, pick] as MutationPick[]);
-    if (resultingDeck.length < MIN_DECK_SIZE) {
-      throw new HttpsError(
-        'failed-precondition',
-        'That mutation would shrink your deck too far to play a round.',
-      );
-    }
-
-    picks[uid] = pick;
-
-    tx.update(gameRef, {
-      mutationPicks: picks,
-      updatedAt: Date.now(),
-    });
   });
 
   return { success: true };

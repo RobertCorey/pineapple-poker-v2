@@ -9,9 +9,6 @@ import {
   handlePhaseTimeout,
   checkAndAdvance,
   placeSingleBotCards,
-  processCharmPicks,
-  botPickCharm,
-  autoFillCharmPicks,
 } from './game-engine';
 
 function isPlacementPhase(phase: string): boolean {
@@ -138,13 +135,6 @@ export class Dealer {
         room.timer = null;
         this.onInterRoundTimeout(roomId);
       }, delay);
-    } else if (phase === GP.CharmPick) {
-      console.log(`[Dealer] [${roomId}] Timer set: charm-pick timeout in ${Math.round(delay / 1000)}s`);
-      room.timer = setTimeout(() => {
-        room.currentDeadline = null;
-        room.timer = null;
-        this.onCharmPickTimeout(roomId);
-      }, delay);
     }
   }
 
@@ -187,29 +177,6 @@ export class Dealer {
     if (game.phase === GP.Scoring) {
       console.log(`[Dealer] [${roomId}] Scoring round`);
       await scoreRound(this.db, roomId);
-      return;
-    }
-
-    if (game.phase === GP.CharmPick) {
-      // Auto-pick for any bots that haven't picked yet
-      const picks = game.charmPicks ?? {};
-      const botsNeedToPick = game.playerOrder.filter((uid) => {
-        const p = game.players[uid];
-        return p?.isBot && !picks[uid];
-      });
-      for (const botUid of botsNeedToPick) {
-        try {
-          await botPickCharm(this.db, roomId, botUid);
-        } catch (err) {
-          console.error(`[Dealer] [${roomId}] Bot charm pick error:`, err);
-        }
-      }
-
-      // After picks (or if all already picked), try to advance
-      const advanced = await processCharmPicks(this.db, roomId);
-      if (advanced) {
-        await maybeStartRound(this.db, roomId);
-      }
       return;
     }
 
@@ -260,19 +227,6 @@ export class Dealer {
       await maybeStartRound(this.db, roomId);
     })().catch((err) => {
       console.error(`[Dealer] [${roomId}] Inter-round handler error:`, err);
-    });
-  }
-
-  private onCharmPickTimeout(roomId: string): void {
-    console.log(`[Dealer] [${roomId}] Charm-pick timer fired — auto-picking for idle players`);
-    (async () => {
-      await autoFillCharmPicks(this.db, roomId);
-      const advanced = await processCharmPicks(this.db, roomId);
-      if (advanced) {
-        await maybeStartRound(this.db, roomId);
-      }
-    })().catch((err) => {
-      console.error(`[Dealer] [${roomId}] Charm-pick timeout error:`, err);
     });
   }
 }

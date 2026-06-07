@@ -37,7 +37,6 @@ export function Lobby({ uid, displayName, setDisplayName, signIn, gameState, isI
     return DEFAULT_MATCH_SETTINGS.turnTimeoutMs;
   };
   const [turnTimeoutMs, setTurnTimeoutMs] = useState<number>(getInitialTimeout);
-  const [runMode, setRunMode] = useState<boolean>(false);
 
   const players = gameState ? Object.values(gameState.players) : [];
   const isHost = gameState?.hostUid === uid;
@@ -66,8 +65,8 @@ export function Lobby({ uid, displayName, setDisplayName, signIn, gameState, isI
         turnTimeoutMs,
         interRoundDelayMs: DEFAULT_MATCH_SETTINGS.interRoundDelayMs,
       };
-      await startMatch({ roomId, settings, runMode });
-      trackEvent('start_match', { roomId, runMode: runMode ? 1 : 0 });
+      await startMatch({ roomId, settings });
+      trackEvent('start_match', { roomId });
     } catch (err) {
       console.error('Failed to start match:', err);
       showToast('Failed to start match');
@@ -181,54 +180,6 @@ export function Lobby({ uid, displayName, setDisplayName, signIn, gameState, isI
                 </select>
               ) : (
                 <span className="text-gray-400">{turnTimeoutMs / 1000}s</span>
-              )}
-            </div>
-            <div className="text-xs mt-3">
-              <div className="text-gray-400 mb-1">Game Mode</div>
-              {isHost ? (
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setRunMode(false)}
-                    className={`py-2 px-2 border text-xs font-bold transition-colors ${
-                      !runMode
-                        ? 'border-green-500 bg-green-900/40 text-green-200'
-                        : 'border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-500'
-                    }`}
-                  >
-                    <div>Classic</div>
-                    <div className="text-[9px] font-normal text-gray-400 mt-0.5">
-                      3 rounds, no charms
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setRunMode(true)}
-                    className={`py-2 px-2 border text-xs font-bold transition-colors ${
-                      runMode
-                        ? 'border-purple-400 bg-purple-900/40 text-purple-200'
-                        : 'border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-500'
-                    }`}
-                  >
-                    <div>Pineapple Run</div>
-                    <div className="text-[9px] font-normal text-gray-400 mt-0.5">
-                      5 rounds, draft charms
-                    </div>
-                  </button>
-                </div>
-              ) : (
-                <div className="text-gray-400">Host picks mode at start</div>
-              )}
-              {isHost && runMode && (
-                <p className="text-[10px] text-purple-400 mt-2 leading-relaxed">
-                  Roguelike mode. 5 rounds. Between each round, both players draft
-                  a charm (bonus points) and a deck mutation that reshape the run.
-                </p>
-              )}
-              {isHost && !runMode && (
-                <p className="text-[10px] text-gray-500 mt-2 leading-relaxed">
-                  Standard 3-round match with normal scoring.
-                </p>
               )}
             </div>
           </div>
