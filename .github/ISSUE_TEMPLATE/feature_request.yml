@@ -1,0 +1,36 @@
+name: 💡 Suggest a feature or idea
+description: A new charm, a mode, a quality‑of‑life tweak — pitch it!
+title: "[Idea]: "
+labels: ["type:feature"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Love that you're thinking about what's next. 🍍 Player ideas genuinely shape the roadmap.
+  - type: textarea
+    id: idea
+    attributes:
+      label: What's your idea?
+      description: Describe the feature, charm, mutation, or change you'd like to see.
+      placeholder: e.g. "A charm that gives +2 for every straight."
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why would it make the game better?
+      description: What's the problem it solves or the fun it adds?
+    validations:
+      required: false
+  - type: dropdown
+    id: area
+    attributes:
+      label: What part of the game is this about?
+      options:
+        - Gameplay & rules
+        - Pineapple Run (charms / mutations)
+        - Multiplayer & rooms
+        - Look & feel / UI
+        - Something else
+    validations:
+      required: false

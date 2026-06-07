@@ -1,0 +1,34 @@
+# Auto-applies area:* labels based on which files a PR touches.
+# Used by .github/workflows/labeler.yml (actions/labeler v5).
+
+"area:frontend":
+  - changed-files:
+      - any-glob-to-any-file: "frontend/**"
+
+"area:functions":
+  - changed-files:
+      - any-glob-to-any-file: "functions/**"
+
+"area:dealer":
+  - changed-files:
+      - any-glob-to-any-file: "dealer/**"
+
+"area:shared":
+  - changed-files:
+      - any-glob-to-any-file: "shared/**"
+
+"area:e2e":
+  - changed-files:
+      - any-glob-to-any-file: "e2e/**"
+
+"area:ci":
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/workflows/**"
+          - ".github/**"
+
+"type:docs":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/*.md"
+          - "docs/**"

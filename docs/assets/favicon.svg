@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <rect width="64" height="64" rx="14" fill="#0a0e1a"/>
+  <rect x="1.5" y="1.5" width="61" height="61" rx="12.5" fill="none" stroke="#243149" stroke-width="2"/>
+  <g font-family="ui-monospace, monospace" font-size="22" font-weight="700" text-anchor="middle">
+    <text x="21" y="29" fill="#e5e7eb">♠</text>
+    <text x="43" y="29" fill="#ef4444">♥</text>
+    <text x="21" y="52" fill="#3b82f6">♦</text>
+    <text x="43" y="52" fill="#22c55e">♣</text>
+  </g>
+</svg>

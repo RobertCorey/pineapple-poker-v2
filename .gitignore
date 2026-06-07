@@ -42,6 +42,9 @@ dealer/lib
 *.png
 .playwright-mcp/
 test-results/
+# …but DO track the landing-page / README marketing assets
+!docs/assets/og-image.png
+!docs/assets/screenshots/*.png
 
 # Dev service management
 .pids/

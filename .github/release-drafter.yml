@@ -1,0 +1,41 @@
+name-template: "v$RESOLVED_VERSION 🍍"
+tag-template: "v$RESOLVED_VERSION"
+categories:
+  - title: "🎮 Gameplay & new features"
+    labels: ["type:feature"]
+  - title: "🐛 Fixes"
+    labels: ["type:bug"]
+  - title: "⚡ Performance"
+    labels: ["type:perf"]
+  - title: "🧹 Under the hood"
+    labels: ["type:chore", "type:refactor", "type:docs"]
+change-template: "- $TITLE (#$NUMBER)"
+change-title-escapes: '\<*_&'
+version-resolver:
+  major:
+    labels: ["major"]
+  minor:
+    labels: ["type:feature"]
+  patch:
+    labels: ["type:bug", "type:perf", "type:chore", "type:refactor", "type:docs"]
+  default: patch
+autolabeler:
+  - label: "type:feature"
+    title: ["/^feat(\\(.+\\))?:/"]
+  - label: "type:bug"
+    title: ["/^fix(\\(.+\\))?:/"]
+  - label: "type:perf"
+    title: ["/^perf(\\(.+\\))?:/"]
+  - label: "type:refactor"
+    title: ["/^refactor(\\(.+\\))?:/"]
+  - label: "type:docs"
+    title: ["/^docs(\\(.+\\))?:/"]
+  - label: "type:chore"
+    title: ["/^(chore|ci|build)(\\(.+\\))?:/"]
+template: |
+  ## 🍍 What's new
+
+  $CHANGES
+
+  ---
+  **[▶ Play now](https://pineapple-poker-8f3.web.app)** — free, in your browser.

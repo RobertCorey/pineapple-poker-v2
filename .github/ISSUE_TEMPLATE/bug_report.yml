@@ -1,0 +1,64 @@
+name: 🐛 Report a problem
+description: Something broken, glitchy, or not working while you play? Let us know.
+title: "[Bug]: "
+labels: ["type:bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping make the game better! 🍍
+        Please fill in what you can — even a quick description helps.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What went wrong, and what did you expect instead?
+      placeholder: e.g. "My cards didn't place when I tapped a slot on the last street."
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How can we see it too?
+      description: Steps to reproduce it, if you know them.
+      placeholder: |
+        1. Created a room in Pineapple Run mode
+        2. Got to street 4
+        3. Tapped a card and …
+    validations:
+      required: false
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Which mode were you playing?
+      options:
+        - Classic OFC Pineapple
+        - Pineapple Run
+        - Not sure / on the lobby screen
+    validations:
+      required: false
+  - type: dropdown
+    id: device
+    attributes:
+      label: What were you playing on?
+      options:
+        - Phone
+        - Tablet
+        - Desktop / laptop
+    validations:
+      required: false
+  - type: input
+    id: room
+    attributes:
+      label: Room code (optional)
+      description: If it happened in a specific room, the 6‑character code helps us look it up.
+      placeholder: e.g. AB3KP9
+    validations:
+      required: false
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: Drag and drop any screenshots or a screen recording here — super helpful!
+    validations:
+      required: false

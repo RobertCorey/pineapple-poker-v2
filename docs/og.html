@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Pineapple Poker — OG image</title>
+<style>
+  :root{
+    --bg:#0a0e1a; --green:#22c55e; --gold:#fbbf24; --ink:#e8edf6; --muted:#9aa7bd; --line:#243149;
+    --spade:#e5e7eb; --heart:#ef4444; --diamond:#3b82f6; --club:#22c55e;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  *{box-sizing:border-box; margin:0; padding:0}
+  html,body{width:1200px; height:630px; overflow:hidden}
+  body{
+    background:var(--bg); color:var(--ink); font-family:var(--mono); position:relative;
+    background-image:
+      radial-gradient(900px 520px at 16% -12%, rgba(34,197,94,.20), transparent 60%),
+      radial-gradient(820px 520px at 96% 18%, rgba(59,130,246,.15), transparent 55%),
+      radial-gradient(720px 520px at 62% 125%, rgba(167,139,250,.13), transparent 55%);
+  }
+  .frame{position:absolute; inset:22px; border:1.5px solid var(--line); border-radius:24px}
+  .bigsuit{position:absolute; font-size:230px; opacity:.05; right:54px; bottom:6px; color:var(--gold); font-family:var(--mono)}
+  .pad{position:absolute; inset:0; padding:0 78px; display:flex; align-items:center; justify-content:space-between; gap:30px}
+
+  .left{max-width:640px}
+  .brand{display:flex; align-items:center; gap:13px; font-size:24px; letter-spacing:3px; color:var(--muted); text-transform:uppercase; margin-bottom:24px}
+  .brand .pine{font-size:38px}
+  h1{font-size:66px; line-height:1.04; font-weight:800; letter-spacing:-1.5px; margin-bottom:22px; white-space:nowrap}
+  h1 .g{background:linear-gradient(135deg,#fde68a,#fbbf24 45%,#22c55e); -webkit-background-clip:text; background-clip:text; color:transparent}
+  .tag{font-size:24px; color:var(--muted); margin-bottom:34px; line-height:1.4; max-width:600px}
+  .row{display:flex; align-items:center; gap:22px}
+  .play{display:inline-flex; align-items:center; gap:12px; background:var(--green); color:#04140a; font-weight:800;
+    font-size:25px; padding:15px 30px; border-radius:14px; box-shadow:0 14px 40px rgba(34,197,94,.45); white-space:nowrap}
+  .row{flex-wrap:nowrap}
+  .url{font-size:21px; color:var(--muted)}
+
+  /* fanned cards */
+  .fan{position:relative; width:430px; height:340px; flex-shrink:0}
+  .c{position:absolute; left:50%; top:50%; width:138px; height:194px; margin-left:-69px; margin-top:-97px;
+    border-radius:16px; background:#0e1626; border:2px solid var(--line);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; font-weight:800; font-size:54px;
+    box-shadow:0 24px 55px rgba(0,0,0,.6)}
+  .c .su{font-size:44px; margin-top:6px}
+  .c1{transform:rotate(-21deg) translate(-168px,20px); color:var(--spade);   border-color:#3a465c}
+  .c2{transform:rotate(-7deg)  translate(-56px,-10px); color:var(--heart);   border-color:rgba(239,68,68,.55)}
+  .c3{transform:rotate(7deg)   translate(56px,-10px);  color:var(--diamond); border-color:rgba(59,130,246,.55)}
+  .c4{transform:rotate(21deg)  translate(168px,20px);  color:var(--club);    border-color:rgba(34,197,94,.55)}
+
+  .meta{position:absolute; left:0; right:0; bottom:42px; text-align:center; font-size:19px; color:#7d8aa3; letter-spacing:.5px}
+  .meta b{color:var(--ink)}
+</style>
+</head>
+<body>
+  <div class="frame"></div>
+  <div class="bigsuit">♠</div>
+  <div class="pad">
+    <div class="left">
+      <div class="brand"><span class="pine">🍍</span> Pineapple Poker</div>
+      <h1>Stack hands.<br/>Win <span class="g">every row.</span></h1>
+      <div class="tag">Free, real‑time multiplayer<br/>Open Face Chinese poker.</div>
+      <div class="row">
+        <span class="play">▶ PLAY FREE</span>
+        <span class="url">pineapple‑poker‑8f3.web.app</span>
+      </div>
+    </div>
+    <div class="fan">
+      <div class="c c1">A<span class="su">♠</span></div>
+      <div class="c c2">K<span class="su">♥</span></div>
+      <div class="c c3">Q<span class="su">♦</span></div>
+      <div class="c c4">J<span class="su">♣</span></div>
+    </div>
+  </div>
+  <div class="meta"><b>2–16 players</b> &nbsp;·&nbsp; <b>real‑time multiplayer</b> &nbsp;·&nbsp; no install, no signup</div>
+</body>
+</html>

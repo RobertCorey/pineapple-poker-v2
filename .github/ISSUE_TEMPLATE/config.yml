@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: ▶ Play Pineapple Poker
+    url: https://pineapple-poker-8f3.web.app
+    about: Jump straight into a game — free, in your browser, no signup.
+  - name: 💬 Discussions
+    url: https://github.com/RobertCorey/pineapple-poker-v2/discussions
+    about: Ask questions, share hands, and talk strategy with other players.
+  - name: 🍍 What's new
+    url: https://github.com/RobertCorey/pineapple-poker-v2/releases
+    about: See the latest updates and patch notes.

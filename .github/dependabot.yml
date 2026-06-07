@@ -1,0 +1,36 @@
+version: 2
+updates:
+  # Root npm workspaces (frontend, functions, dealer, shared) — single lockfile
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels: ["type:chore", "area:deps"]
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      # Batch low-risk updates into one PR to cut noise
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+
+  # Standalone bot package (not part of the workspaces)
+  - package-ecosystem: npm
+    directory: "/bot"
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    labels: ["type:chore", "area:deps"]
+    commit-message:
+      prefix: chore
+
+  # Keep GitHub Actions pinned versions fresh
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    labels: ["type:chore", "area:ci"]
+    commit-message:
+      prefix: ci
