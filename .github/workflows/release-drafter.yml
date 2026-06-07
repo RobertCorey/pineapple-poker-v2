@@ -1,0 +1,46 @@
+name: Release Drafter
+
+on:
+  push:
+    branches: [main]
+  # pull_request_target (not pull_request) so the workflow + config are read
+  # from the default branch — avoids the "config must reside in default branch"
+  # error and is the recommended pattern for labelers (no PR code is executed).
+  pull_request_target:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  # Keep the draft release notes up to date on every merge to main.
+  draft:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
+    steps:
+      - uses: release-drafter/release-drafter@v6
+        with:
+          config-name: release-drafter.yml
+          disable-autolabeler: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Best-effort: label PRs from their conventional-commit title so the notes
+  # group correctly. Non-blocking — never fails a PR.
+  autolabel:
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: release-drafter/release-drafter@v6
+        with:
+          config-name: release-drafter.yml
+          disable-releaser: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

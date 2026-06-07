@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 📋 Roadmap
+    url: https://github.com/RobertCorey/pineapple-poker-v2/projects
+    about: See what's planned, in progress, and shipped.
+  - name: ▶ Play the game
+    url: https://pineapple-poker-8f3.web.app
+    about: Try Pineapple Poker in your browser.

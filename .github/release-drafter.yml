@@ -1,0 +1,46 @@
+name-template: "v$RESOLVED_VERSION"
+tag-template: "v$RESOLVED_VERSION"
+categories:
+  - title: "🚀 Features"
+    labels: ["type:feature"]
+  - title: "🐛 Bug Fixes"
+    labels: ["type:bug"]
+  - title: "⚡ Performance"
+    labels: ["type:perf"]
+  - title: "📝 Documentation"
+    labels: ["type:docs"]
+  - title: "🧰 Maintenance"
+    labels: ["type:chore", "type:refactor"]
+  - title: "⬆️ Dependencies"
+    labels: ["dependencies"]
+change-template: "- $TITLE (#$NUMBER) @$AUTHOR"
+change-title-escapes: '\<*_&'
+version-resolver:
+  major:
+    labels: ["major"]
+  minor:
+    labels: ["type:feature"]
+  patch:
+    labels: ["type:bug", "type:perf", "type:docs", "type:chore", "type:refactor", "dependencies"]
+  default: patch
+exclude-labels:
+  - "skip-changelog"
+autolabeler:
+  - label: "type:feature"
+    title: ["/^feat(\\(.+\\))?:/"]
+  - label: "type:bug"
+    title: ["/^fix(\\(.+\\))?:/"]
+  - label: "type:perf"
+    title: ["/^perf(\\(.+\\))?:/"]
+  - label: "type:refactor"
+    title: ["/^refactor(\\(.+\\))?:/"]
+  - label: "type:docs"
+    title: ["/^docs(\\(.+\\))?:/"]
+  - label: "type:chore"
+    title: ["/^(chore|ci|build|test)(\\(.+\\))?:/"]
+template: |
+  ## What's Changed
+
+  $CHANGES
+
+  **Full Changelog**: https://github.com/RobertCorey/pineapple-poker-v2/compare/$PREVIOUS_TAG...v$RESOLVED_VERSION
