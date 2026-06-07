@@ -109,6 +109,23 @@ function hasRoyals(board: Board): boolean {
   return false;
 }
 
+/** True if the middle or bottom (complete) row is at least `minRank` strong. */
+function anyFiveCardRowAtLeast(board: Board, minRank: number): boolean {
+  for (const cards of [board.middle, board.bottom]) {
+    if (cards.length === 5 && evaluateRunRow(cards).handRank >= minRank) return true;
+  }
+  return false;
+}
+
+/** Count cards on the board ranked at or below `maxRank`. */
+function countRankAtMost(board: Board, maxRank: number): number {
+  let n = 0;
+  for (const row of [board.top, board.middle, board.bottom]) {
+    for (const c of row) if (c.rank <= maxRank) n++;
+  }
+  return n;
+}
+
 // ---- Charm catalog ----
 
 export const CHARMS: Record<CharmId, CharmDef> = {
@@ -193,6 +210,27 @@ export const CHARMS: Record<CharmId, CharmDef> = {
     emoji: '🥇',
     description: '+5 for each Ace on your board.',
     bonus: (b) => 5 * countRankOnBoard(b, Rank.Ace),
+  },
+  full_boat: {
+    id: 'full_boat',
+    name: 'Full Boat',
+    emoji: '🚤',
+    description: '+25 if any 5-card row is a full house or better.',
+    bonus: (b) => (anyFiveCardRowAtLeast(b, HandRank.FullHouse) ? 25 : 0),
+  },
+  quad_squad: {
+    id: 'quad_squad',
+    name: 'Quad Squad',
+    emoji: '🎰',
+    description: '+40 if any 5-card row is four of a kind or better.',
+    bonus: (b) => (anyFiveCardRowAtLeast(b, HandRank.FourOfAKind) ? 40 : 0),
+  },
+  low_baller: {
+    id: 'low_baller',
+    name: 'Low Baller',
+    emoji: '🎳',
+    description: '+2 for each 5-or-lower card on your board.',
+    bonus: (b) => 2 * countRankAtMost(b, Rank.Five),
   },
   foul_shield: {
     id: 'foul_shield',

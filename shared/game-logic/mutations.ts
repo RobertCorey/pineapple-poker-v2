@@ -191,6 +191,22 @@ export const MUTATIONS: Record<MutationId, MutationDef> = {
     },
     approxDeckSize: 60,
   },
+  bottom_heavy: {
+    id: 'bottom_heavy',
+    name: 'Bottom Heavy',
+    emoji: '🪙',
+    description: 'Remove every face card (J, Q, K, A). Small-ball poker.',
+    apply: (deck) => deck.filter((c) => c.rank < R.Jack),
+    approxDeckSize: 36,
+  },
+  royal_court: {
+    id: 'royal_court',
+    name: 'Royal Court',
+    emoji: '🏰',
+    description: 'Remove every card below 9. Monsters only.',
+    apply: (deck) => deck.filter((c) => c.rank >= R.Nine),
+    approxDeckSize: 24,
+  },
 };
 
 export const MUTATION_IDS: MutationId[] = Object.keys(MUTATIONS);
