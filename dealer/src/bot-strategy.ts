@@ -1,15 +1,20 @@
 /**
  * Bot card placement strategy.
  *
- * Uses a rank-based routing approach with pair detection:
- * - High cards go to bottom, medium to middle, low to top
- * - Pairs are kept together when possible
- * - For streets 2-5, brute-forces all valid placements and picks the best
+ * Greedy per-street placement scored by `scoreBoard`, whose dominant term is
+ * FOUL AVOIDANCE: a completed foul is catastrophic, and during building a higher
+ * row out-ranking a lower one (by made-hand tier, and by real hand comparison
+ * once rows are complete) is heavily penalized so strength stays in the bottom.
+ * Secondary rewards: pairs/flush draws (weighted toward the bottom), high cards
+ * low. Streets 2-5 brute-force all (discard, row-assignment) options.
  *
- * Not game-theory-optimal, but avoids fouling most of the time.
+ * Not game-theory-optimal, but fouls ~11% of games (vs ~56% for naive avg-rank
+ * routing) — see bot-strategy.test.ts.
  */
 import type { Card, Board, Row } from '../../shared/core/types';
 import { TOP_ROW_SIZE, FIVE_CARD_ROW_SIZE } from '../../shared/core/constants';
+import { isFoul } from '../../shared/game-logic/scoring';
+import { compareRows } from '../../shared/game-logic/hand-evaluation';
 
 export interface BotPlacement {
   card: Card;
@@ -50,12 +55,59 @@ function suitCount(card: Card, rowCards: Card[]): number {
 }
 
 /**
+ * Rough made-hand tier from rank multiplicity (works on partial rows), aligned
+ * with HandRank ordering: high card 0, pair 1, two pair 2, trips 3, full house
+ * 6, quads 7. A complete 5-card flush counts as 5. Straights/flush draws are
+ * ignored — pairs in the wrong row are the dominant foul driver this guards.
+ */
+function madeTier(cards: Card[]): number {
+  if (cards.length === 0) return 0;
+  const m = new Map<number, number>();
+  for (const c of cards) m.set(c.rank, (m.get(c.rank) ?? 0) + 1);
+  const counts = [...m.values()].sort((a, b) => b - a);
+  const flush = cards.length === 5 && cards.every((c) => c.suit === cards[0].suit);
+  let straight = false;
+  if (cards.length === 5 && m.size === 5) {
+    const r = [...m.keys()].sort((a, b) => a - b);
+    straight = r[4] - r[0] === 4 || (r[0] === 2 && r[3] === 5 && r[4] === 14);
+  }
+  if (flush && straight) return 8;
+  if (counts[0] >= 4) return 7;
+  if (counts[0] === 3 && (counts[1] ?? 0) >= 2) return 6;
+  if (flush) return 5;
+  if (straight) return 4;
+  if (counts[0] === 3) return 3;
+  if (counts[0] === 2 && (counts[1] ?? 0) === 2) return 2;
+  if (counts[0] === 2) return 1;
+  return 0;
+}
+
+/**
  * Score a board state. Higher is better.
  * Rewards: high cards on bottom, low cards on top, pairs, flush draws.
  * Penalizes: row ordering violations (bottom avg < middle avg, etc.)
  */
 function scoreBoard(board: Board): number {
   let score = 0;
+
+  // --- Foul avoidance (the dominant term) ---
+  // Once a board is complete, an actual foul is catastrophic (loses to every
+  // opponent), so steer hard away from it. While rows are still filling, use
+  // real hand comparison on any two already-complete adjacent rows so the bot
+  // doesn't build a middle/top stronger than the row beneath it. Average rank
+  // (below) is only a weak tiebreak — it does NOT reflect real hand strength.
+  const bottomFull = board.bottom.length === FIVE_CARD_ROW_SIZE;
+  const middleFull = board.middle.length === FIVE_CARD_ROW_SIZE;
+  const topFull = board.top.length === TOP_ROW_SIZE;
+
+  if (bottomFull && middleFull && topFull) {
+    if (isFoul(board)) return -100000;
+    score += 200; // a completed, legal board is the goal
+  }
+  // Bottom must be >= middle: if both complete and that's violated, near-fatal.
+  if (bottomFull && middleFull && compareRows(board.bottom, board.middle, false) < 0) {
+    score -= 5000;
+  }
 
   const bottomAvg = avgRank(board.bottom);
   const middleAvg = avgRank(board.middle);
@@ -73,7 +125,19 @@ function scoreBoard(board: Board): number {
     score -= 50;
   }
 
-  // Reward pairs/trips in each row
+  // Made-hand tier ordering (the strong foul guard during building): a higher
+  // row outranking a lower one in made-hand tier is a foul risk. Penalize
+  // proportionally to how far it's inverted so the bot keeps strength low.
+  const bTier = madeTier(board.bottom);
+  const mTier = madeTier(board.middle);
+  const tTier = madeTier(board.top);
+  if (mTier > bTier) score -= 600 * (mTier - bTier);
+  if (tTier > mTier) score -= 600 * (tTier - mTier);
+
+  // Reward pairs/trips, but weighted by row so made hands gravitate DOWNWARD
+  // (strength belongs in the bottom). Putting a pair in the middle/top while the
+  // bottom stays high-card is the main way this bot used to foul.
+  const ROW_MADE_WEIGHT: Record<Row, number> = { bottom: 1.6, middle: 0.7, top: 0.15 };
   for (const row of ROWS) {
     const cards = board[row];
     const rankMap = new Map<number, number>();
@@ -81,7 +145,7 @@ function scoreBoard(board: Board): number {
       rankMap.set(c.rank, (rankMap.get(c.rank) ?? 0) + 1);
     }
     for (const count of rankMap.values()) {
-      if (count >= 2) score += 15 * (count - 1); // pair=15, trips=30
+      if (count >= 2) score += 15 * (count - 1) * ROW_MADE_WEIGHT[row];
     }
   }
 
