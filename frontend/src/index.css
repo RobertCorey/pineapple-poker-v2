@@ -27,6 +27,18 @@
   animation: lp-glow 6s ease-in-out infinite;
 }
 
+/* ---- Turn timer bar ---- */
+/* Depletes left-to-right over the remaining phase time. The element sets
+   --timer-ms inline; the implicit `from` is its inline scaleX(fraction). */
+@keyframes timer-deplete {
+  to { transform: scaleX(0); }
+}
+.timer-deplete {
+  transform-origin: left;
+  animation: timer-deplete linear forwards;
+  animation-duration: var(--timer-ms, 0ms);
+}
+
 /* Accessibility: collapse all animations/transitions for users who ask the OS
    for reduced motion. Content stays visible — only the motion is removed.
    The .lp-* overrides pin entrance elements at full opacity (their keyframes
@@ -41,4 +53,7 @@
     scroll-behavior: auto !important;
   }
   .lp-fade-up, .lp-float, .lp-glow { animation: none; opacity: 1; }
+  /* The turn timer is essential information (time remaining), not decorative
+     motion — collapsing it would blank the only always-visible countdown. */
+  .timer-deplete { animation-duration: var(--timer-ms, 0ms) !important; }
 }
