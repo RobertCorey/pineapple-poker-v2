@@ -27,6 +27,18 @@
   animation: lp-glow 6s ease-in-out infinite;
 }
 
+/* Accessibility: collapse all animations/transitions for users who ask the OS
+   for reduced motion. Content stays visible — only the motion is removed.
+   The .lp-* overrides pin entrance elements at full opacity (their keyframes
+   start from opacity 0, so just shortening them isn't enough). */
 @media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
   .lp-fade-up, .lp-float, .lp-glow { animation: none; opacity: 1; }
 }
