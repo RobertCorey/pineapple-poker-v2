@@ -361,6 +361,294 @@ describe('scorePairwise', () => {
   });
 });
 
+// ---- Royalty & tie edge cases ----
+
+describe('royalty edge cases', () => {
+  it('scores bottom wheel straight (A-2-3-4-5) = 2', () => {
+    const board: Board = {
+      top: validBoard().top,
+      middle: validBoard().middle,
+      bottom: [
+        card(Rank.Ace, Suit.Spades),
+        card(Rank.Two, Suit.Hearts),
+        card(Rank.Three, Suit.Diamonds),
+        card(Rank.Four, Suit.Clubs),
+        card(Rank.Five, Suit.Spades),
+      ],
+    };
+    expect(calculateRoyalties(board).bottom).toBe(2);
+  });
+
+  it('scores bottom steel wheel (A-5 straight flush) = 15, not royal flush', () => {
+    const board: Board = {
+      top: validBoard().top,
+      middle: validBoard().middle,
+      bottom: [
+        card(Rank.Ace, Suit.Hearts),
+        card(Rank.Two, Suit.Hearts),
+        card(Rank.Three, Suit.Hearts),
+        card(Rank.Four, Suit.Hearts),
+        card(Rank.Five, Suit.Hearts),
+      ],
+    };
+    expect(calculateRoyalties(board).bottom).toBe(15);
+  });
+
+  it('scores bottom royal flush = 25', () => {
+    const board: Board = {
+      top: validBoard().top,
+      middle: validBoard().middle,
+      bottom: [
+        card(Rank.Ten, Suit.Spades),
+        card(Rank.Jack, Suit.Spades),
+        card(Rank.Queen, Suit.Spades),
+        card(Rank.King, Suit.Spades),
+        card(Rank.Ace, Suit.Spades),
+      ],
+    };
+    expect(calculateRoyalties(board).bottom).toBe(25);
+  });
+
+  it('scores middle straight flush = 30 (doubled vs bottom 15)', () => {
+    const board: Board = {
+      top: validBoard().top,
+      middle: [
+        card(Rank.Five, Suit.Clubs),
+        card(Rank.Six, Suit.Clubs),
+        card(Rank.Seven, Suit.Clubs),
+        card(Rank.Eight, Suit.Clubs),
+        card(Rank.Nine, Suit.Clubs),
+      ],
+      bottom: [
+        card(Rank.Ten, Suit.Spades),
+        card(Rank.Jack, Suit.Spades),
+        card(Rank.Queen, Suit.Spades),
+        card(Rank.King, Suit.Spades),
+        card(Rank.Ace, Suit.Spades),
+      ],
+    };
+    const r = calculateRoyalties(board);
+    expect(r.middle).toBe(30);
+    expect(r.bottom).toBe(25);
+    expect(r.total).toBe(55);
+  });
+
+  it('middle straight = 4 (doubled vs bottom 2)', () => {
+    const board: Board = {
+      top: validBoard().top,
+      middle: [
+        card(Rank.Five, Suit.Clubs),
+        card(Rank.Six, Suit.Hearts),
+        card(Rank.Seven, Suit.Diamonds),
+        card(Rank.Eight, Suit.Clubs),
+        card(Rank.Nine, Suit.Spades),
+      ],
+      bottom: validBoard().bottom.map((c) => ({ ...c })),
+    };
+    // bottom (two pair AA KK) must outrank middle straight? It doesn't — but
+    // royalties are computed per row regardless; foul handling is separate.
+    expect(calculateRoyalties(board).middle).toBe(4);
+  });
+
+  it('nets royalties when both players have them', () => {
+    const flushBottom: Board = {
+      top: validBoard().top,
+      middle: validBoard().middle,
+      bottom: [
+        card(Rank.Two, Suit.Hearts),
+        card(Rank.Five, Suit.Hearts),
+        card(Rank.Seven, Suit.Hearts),
+        card(Rank.Nine, Suit.Hearts),
+        card(Rank.Jack, Suit.Hearts),
+      ], // flush = 4
+    };
+    const straightBottom: Board = {
+      top: weakerValidBoard().top,
+      middle: weakerValidBoard().middle,
+      bottom: [
+        card(Rank.Five, Suit.Spades),
+        card(Rank.Six, Suit.Hearts),
+        card(Rank.Seven, Suit.Diamonds),
+        card(Rank.Eight, Suit.Clubs),
+        card(Rank.Nine, Suit.Spades),
+      ], // straight = 2
+    };
+    const result = scorePairwise('a', false, flushBottom, 'b', false, straightBottom);
+    expect(result.royalties).toBe(4 - 2);
+  });
+});
+
+describe('tie and scoop edge cases', () => {
+  it('no scoop when winning 2 rows and tying 1', () => {
+    const a = validBoard();
+    // b ties a's top exactly (same ranks), loses middle and bottom
+    const b: Board = {
+      top: [
+        card(Rank.Two, Suit.Clubs),
+        card(Rank.Three, Suit.Diamonds),
+        card(Rank.Four, Suit.Hearts),
+      ],
+      middle: weakerValidBoard().middle,
+      bottom: weakerValidBoard().bottom,
+    };
+    const result = scorePairwise('a', false, a, 'b', false, b);
+    expect(result.rowPoints).toBe(2); // top tie = 0, middle +1, bottom +1
+    expect(result.scoopBonus).toBe(0);
+  });
+
+  it('tied rows still net royalty differential', () => {
+    // Identical weak top/middle; bottoms tie in rank (both flushes, same ranks
+    // different suits) — rowPoints 0 but no royalty difference either.
+    const a: Board = {
+      top: validBoard().top,
+      middle: validBoard().middle,
+      bottom: [
+        card(Rank.Two, Suit.Hearts),
+        card(Rank.Five, Suit.Hearts),
+        card(Rank.Seven, Suit.Hearts),
+        card(Rank.Nine, Suit.Hearts),
+        card(Rank.Jack, Suit.Hearts),
+      ], // flush = 4 royalties
+    };
+    const b: Board = {
+      top: [
+        card(Rank.Two, Suit.Diamonds),
+        card(Rank.Three, Suit.Clubs),
+        card(Rank.Four, Suit.Hearts),
+      ],
+      middle: [
+        card(Rank.Six, Suit.Clubs),
+        card(Rank.Six, Suit.Diamonds),
+        card(Rank.Seven, Suit.Hearts),
+        card(Rank.Eight, Suit.Spades),
+        card(Rank.Nine, Suit.Clubs),
+      ],
+      bottom: [
+        card(Rank.Ace, Suit.Diamonds),
+        card(Rank.Ace, Suit.Clubs),
+        card(Rank.King, Suit.Hearts),
+        card(Rank.King, Suit.Spades),
+        card(Rank.Queen, Suit.Diamonds),
+      ], // two pair = 0 royalties
+    };
+    const result = scorePairwise('a', false, a, 'b', false, b);
+    // top ties, middle ties, bottom: flush beats two pair
+    expect(result.rowPoints).toBe(1);
+    expect(result.scoopBonus).toBe(0);
+    expect(result.royalties).toBe(4);
+    expect(result.total).toBe(5);
+  });
+});
+
+// ---- isFoul boundary cases ----
+
+describe('isFoul boundary cases', () => {
+  it('returns false when bottom equals middle (bottom >= middle allowed)', () => {
+    // Same hand strength in middle and bottom: identical ranks, different suits
+    const board: Board = {
+      top: [
+        card(Rank.Two, Suit.Spades),
+        card(Rank.Three, Suit.Hearts),
+        card(Rank.Four, Suit.Diamonds),
+      ],
+      middle: [
+        card(Rank.Six, Suit.Spades),
+        card(Rank.Six, Suit.Hearts),
+        card(Rank.Seven, Suit.Diamonds),
+        card(Rank.Eight, Suit.Clubs),
+        card(Rank.Nine, Suit.Spades),
+      ],
+      bottom: [
+        card(Rank.Six, Suit.Clubs),
+        card(Rank.Six, Suit.Diamonds),
+        card(Rank.Seven, Suit.Hearts),
+        card(Rank.Eight, Suit.Spades),
+        card(Rank.Nine, Suit.Clubs),
+      ],
+    };
+    expect(isFoul(board)).toBe(false);
+  });
+
+  it('returns true when middle pair outranks top pair only on kickers', () => {
+    // Top: pair of 5s with Ace kicker. Middle: pair of 5s with King kicker.
+    // Middle < top on kickers → foul.
+    const board: Board = {
+      top: [
+        card(Rank.Five, Suit.Spades),
+        card(Rank.Five, Suit.Hearts),
+        card(Rank.Ace, Suit.Diamonds),
+      ],
+      middle: [
+        card(Rank.Five, Suit.Diamonds),
+        card(Rank.Five, Suit.Clubs),
+        card(Rank.King, Suit.Spades),
+        card(Rank.Three, Suit.Hearts),
+        card(Rank.Two, Suit.Diamonds),
+      ],
+      bottom: [
+        card(Rank.Ace, Suit.Spades),
+        card(Rank.Ace, Suit.Hearts),
+        card(Rank.King, Suit.Diamonds),
+        card(Rank.King, Suit.Clubs),
+        card(Rank.Queen, Suit.Spades),
+      ],
+    };
+    expect(isFoul(board)).toBe(true);
+  });
+
+  it('returns false when middle beats top pair on kickers', () => {
+    // Top: pair of 5s, King kicker. Middle: pair of 5s, Ace kicker. Valid.
+    const board: Board = {
+      top: [
+        card(Rank.Five, Suit.Spades),
+        card(Rank.Five, Suit.Hearts),
+        card(Rank.King, Suit.Diamonds),
+      ],
+      middle: [
+        card(Rank.Five, Suit.Diamonds),
+        card(Rank.Five, Suit.Clubs),
+        card(Rank.Ace, Suit.Spades),
+        card(Rank.Three, Suit.Hearts),
+        card(Rank.Two, Suit.Diamonds),
+      ],
+      bottom: [
+        card(Rank.Ace, Suit.Hearts),
+        card(Rank.Ace, Suit.Diamonds),
+        card(Rank.King, Suit.Clubs),
+        card(Rank.King, Suit.Spades),
+        card(Rank.Queen, Suit.Spades),
+      ],
+    };
+    expect(isFoul(board)).toBe(false);
+  });
+
+  it('wheel straight in bottom still fouls against higher middle straight', () => {
+    // Bottom: A-2-3-4-5 straight (lowest). Middle: 6-7-8-9-10 straight (higher).
+    const board: Board = {
+      top: [
+        card(Rank.Two, Suit.Spades),
+        card(Rank.Three, Suit.Hearts),
+        card(Rank.Four, Suit.Diamonds),
+      ],
+      middle: [
+        card(Rank.Six, Suit.Spades),
+        card(Rank.Seven, Suit.Hearts),
+        card(Rank.Eight, Suit.Diamonds),
+        card(Rank.Nine, Suit.Clubs),
+        card(Rank.Ten, Suit.Spades),
+      ],
+      bottom: [
+        card(Rank.Ace, Suit.Spades),
+        card(Rank.Two, Suit.Hearts),
+        card(Rank.Three, Suit.Diamonds),
+        card(Rank.Four, Suit.Clubs),
+        card(Rank.Five, Suit.Spades),
+      ],
+    };
+    expect(isFoul(board)).toBe(true);
+  });
+});
+
 // ---- scoreAllPlayers ----
 
 describe('scoreAllPlayers', () => {
@@ -437,6 +725,45 @@ describe('scoreAllPlayers', () => {
     for (const player of result.players) {
       expect(player.pairwise).toHaveLength(2);
     }
+  });
+
+  it('all players fouled: everyone scores 0', () => {
+    const boards = new Map<string, Board>();
+    boards.set('a', fouledBoard());
+    boards.set('b', fouledBoard());
+    boards.set('c', fouledBoard());
+
+    const fouls = new Map<string, boolean>();
+    fouls.set('a', true);
+    fouls.set('b', true);
+    fouls.set('c', true);
+
+    const result = scoreAllPlayers(boards, fouls);
+    for (const player of result.players) {
+      expect(player.netScore).toBe(0);
+      expect(player.fouled).toBe(true);
+    }
+  });
+
+  it('one fouled player pays every opponent (n-player)', () => {
+    const boards = new Map<string, Board>();
+    boards.set('a', validBoard());
+    boards.set('b', weakerValidBoard());
+    boards.set('c', fouledBoard());
+
+    const fouls = new Map<string, boolean>();
+    fouls.set('a', false);
+    fouls.set('b', false);
+    fouls.set('c', true);
+
+    const result = scoreAllPlayers(boards, fouls);
+    const playerC = result.players.find((p) => p.uid === 'c')!;
+
+    // c loses FOUL_PENALTY to each of the 2 opponents
+    expect(playerC.netScore).toBe(-2 * FOUL_PENALTY);
+    // Zero-sum holds with a foul in the mix
+    const totalScore = result.players.reduce((sum, p) => sum + p.netScore, 0);
+    expect(totalScore).toBe(0);
   });
 
   it('pairwise results are properly inverted between players', () => {
