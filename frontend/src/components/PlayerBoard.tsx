@@ -27,11 +27,16 @@ function padRow(cards: Card[], size: number): (Card | null)[] {
   return result;
 }
 
-function rowLabel(
+interface RowEvalInfo {
+  label: string;
+  royalty: boolean;
+}
+
+function rowEval(
   row: 'top' | 'middle' | 'bottom',
   board: Board,
   royalties: { top: number; middle: number; bottom: number },
-): string | null {
+): RowEvalInfo | null {
   if (row === 'top') {
     if (board.top.length < 3) return null;
     const eval3 = evaluate3CardHand(board.top);
@@ -43,7 +48,7 @@ function rowLabel(
     }
     const name = THREE_CARD_HAND_RANK_NAMES[eval3.handRank];
     const pts = royalties.top;
-    return pts > 0 ? `${name} +${pts}` : name;
+    return { label: pts > 0 ? `${name} +${pts}` : name, royalty: pts > 0 };
   } else {
     const cards = row === 'middle' ? board.middle : board.bottom;
     if (cards.length < 5) return null;
@@ -51,7 +56,7 @@ function rowLabel(
     if (eval5.handRank === HandRank.HighCard) return null;
     const name = HAND_RANK_NAMES[eval5.handRank];
     const pts = royalties[row];
-    return pts > 0 ? `${name} +${pts}` : name;
+    return { label: pts > 0 ? `${name} +${pts}` : name, royalty: pts > 0 };
   }
 }
 
@@ -74,13 +79,13 @@ interface PlayerBoardProps {
   onUndoCard?: (row: Row, pendingIndex: number) => void;
 }
 
-function RowOverlay({ label, cardWidthPx }: { label: string; cardWidthPx: number }) {
+function RowOverlay({ label, royalty, cardWidthPx }: { label: string; royalty: boolean; cardWidthPx: number }) {
   return (
     <div
-      className="absolute inset-0 flex items-center justify-center bg-black/60 pointer-events-none rounded z-[5]"
+      className={`absolute inset-0 flex items-center justify-center bg-black/60 pointer-events-none rounded z-[5] ${royalty ? 'royalty-glow' : ''}`}
       style={{ fontSize: Math.max(10, Math.round(cardWidthPx * 0.28)) }}
     >
-      <span className="text-white font-bold drop-shadow-lg">{label}</span>
+      <span className={`font-bold drop-shadow-lg ${royalty ? 'text-yellow-300' : 'text-white'}`}>{label}</span>
     </div>
   );
 }
@@ -147,9 +152,9 @@ export function PlayerBoard({
 
   // Compute row labels (only when not fouled)
   const royalties = calculateRoyalties(board);
-  const topLabel = !fouled ? rowLabel('top', board, royalties) : null;
-  const middleLabel = !fouled ? rowLabel('middle', board, royalties) : null;
-  const bottomLabel = !fouled ? rowLabel('bottom', board, royalties) : null;
+  const topEval = !fouled ? rowEval('top', board, royalties) : null;
+  const middleEval = !fouled ? rowEval('middle', board, royalties) : null;
+  const bottomEval = !fouled ? rowEval('bottom', board, royalties) : null;
 
   return (
     <div
@@ -183,7 +188,7 @@ export function PlayerBoard({
         <div style={{ width: cardWidthPx }} />
         {topSlots.map((card, i) => renderSlot('top', Row.Top, board.top, card, i, `top-${i}`))}
         <div style={{ width: cardWidthPx }} />
-        {topLabel && <RowOverlay label={topLabel} cardWidthPx={cardWidthPx} />}
+        {topEval && <RowOverlay label={topEval.label} royalty={topEval.royalty} cardWidthPx={cardWidthPx} />}
       </div>
 
       {/* Middle row - 5 cards */}
@@ -194,7 +199,7 @@ export function PlayerBoard({
         style={{ gap, ...(fouled ? { transform: 'rotate(1deg)' } : {}) }}
       >
         {middleSlots.map((card, i) => renderSlot('middle', Row.Middle, board.middle, card, i, `mid-${i}`))}
-        {middleLabel && <RowOverlay label={middleLabel} cardWidthPx={cardWidthPx} />}
+        {middleEval && <RowOverlay label={middleEval.label} royalty={middleEval.royalty} cardWidthPx={cardWidthPx} />}
       </div>
 
       {/* Bottom row - 5 cards */}
@@ -205,7 +210,7 @@ export function PlayerBoard({
         style={{ gap, ...(fouled ? { transform: 'rotate(3deg)' } : {}) }}
       >
         {bottomSlots.map((card, i) => renderSlot('bottom', Row.Bottom, board.bottom, card, i, `bot-${i}`))}
-        {bottomLabel && <RowOverlay label={bottomLabel} cardWidthPx={cardWidthPx} />}
+        {bottomEval && <RowOverlay label={bottomEval.label} royalty={bottomEval.royalty} cardWidthPx={cardWidthPx} />}
       </div>
 
       {/* Foul overlay */}
