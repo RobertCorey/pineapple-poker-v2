@@ -1,0 +1,58 @@
+name: 🐛 Bug report
+description: Report a problem with the game or the codebase
+title: "[Bug]: "
+labels: ["type:bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Create a room…
+        2. On street 4…
+        3. See error
+    validations:
+      required: false
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Frontend (UI)
+        - Dealer / game engine
+        - Cloud Functions
+        - Shared game logic
+        - E2E / tests
+        - Infra / CI / deploy
+        - Not sure
+    validations:
+      required: false
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      description: Browser / device / OS, and whether it was local or production.
+      placeholder: e.g. Chrome 130, iPhone 14, production
+    validations:
+      required: false
+  - type: input
+    id: room
+    attributes:
+      label: Room code (if applicable)
+      placeholder: e.g. AB3KP9
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / screenshots
+      description: Console errors, dealer logs, or screenshots — drag & drop here.
+    validations:
+      required: false
