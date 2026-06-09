@@ -4,7 +4,7 @@ import { useSoundEffects } from '../../audio/useSoundEffects.ts';
 import { useTickSound } from '../../audio/useTickSound.ts';
 import type { Card, Row, Board } from '@shared/core/types';
 import { GamePhase } from '@shared/core/types';
-import { INITIAL_DEAL_COUNT, STREET_PLACE_COUNT } from '@shared/core/constants';
+import { INITIAL_DEAL_COUNT, STREET_PLACE_COUNT, DEFAULT_MATCH_SETTINGS } from '@shared/core/constants';
 import { isFoul } from '@shared/game-logic/scoring';
 import { placeCards, leaveGame } from '../../api.ts';
 import { trackEvent } from '../../firebase.ts';
@@ -17,6 +17,7 @@ import { MobileOpponentGrid } from './MobileOpponentGrid.tsx';
 import { MobileHandArea } from './MobileHandArea.tsx';
 import { MobileRoundOverlay } from './MobileRoundOverlay.tsx';
 import { MobileMatchOverlay } from './MobileMatchOverlay.tsx';
+import { TimerBar } from './TimerBar.tsx';
 
 const STREET_PHASES = new Set<string>([
   GamePhase.Street2,
@@ -273,11 +274,6 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
       <div className="border-b border-gray-700 px-2 py-1.5 flex items-center justify-between text-[10px] flex-shrink-0">
         <div className="flex items-center gap-2">
           <span className="text-green-400 font-bold tracking-wider">{roomId}</span>
-          {showTimer && (
-            <span className={`font-bold ${countdown <= 10 ? 'text-red-400 animate-pulse text-sm' : 'text-yellow-400'}`}>
-              {countdown}s
-            </span>
-          )}
         </div>
         <div className="flex items-center gap-2">
           <span className="text-gray-500" data-testid="phase-label">
@@ -299,6 +295,17 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
           </button>
         </div>
       </div>
+
+      {/* Turn timer: depleting bar under the header (replaces a numeric countdown).
+          The ≤10s warning banner below still spells out the seconds. */}
+      {showTimer && gameState.phaseDeadline != null && (
+        <TimerBar
+          deadline={gameState.phaseDeadline}
+          totalMs={gameState.settings?.turnTimeoutMs ?? DEFAULT_MATCH_SETTINGS.turnTimeoutMs}
+          urgent={countdown <= 10}
+          secondsLeft={countdown}
+        />
+      )}
 
       {/* Observer banner */}
       {isObserver && (
