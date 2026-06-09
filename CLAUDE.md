@@ -73,11 +73,14 @@ npm test                           # Playwright E2E tests
 
 E2E tests are in `e2e/`. Each test generates a unique room code for isolation — no shared state between tests.
 
-`e2e/` has 8 specs. The default `npm test` suite runs 6 (`bot` + `stress` are always ignored via `playwright.config.ts`; production runs additionally ignore `scoring` + `sit-out`):
+`e2e/` has 11 specs. The default `npm test` suite runs 9 (`bot` + `stress` are always ignored via `playwright.config.ts`; production runs additionally ignore `scoring` + `sit-out`):
+- `00-warmup.spec.ts` — absorbs the worker browser's one-time cold-start cost
 - `happy-path.spec.ts` — 2-player full 3-round match, play again
 - `card-placement.spec.ts` — card placement UI, auto-submit, auto-discard
+- `card-placement-undo.spec.ts` — tap a placed (unsubmitted) card to take it back
 - `sit-out.spec.ts` — timeout auto-places cards; player stays active next round
 - `leave-game.spec.ts` — player leaves mid-round, game continues for remaining player
+- `resume-game.spec.ts` — player who lost the room URL rejoins via home-screen banner
 - `observer.spec.ts` — late joiner observes full match, promoted via play-again, 3-player game
 - `scoring.spec.ts` — foul penalty scores (+6/-6), pairwise breakdown, cumulative totals
 - `bot.spec.ts`, `stress.spec.ts` — always ignored by config (manual / load testing)
@@ -98,7 +101,7 @@ npm run test:dealer                # Unit + integration (requires Firestore emul
 - **Backend**: Firebase Cloud Functions (Node.js/TypeScript)
 - **Database**: Firestore (real-time listeners)
 - **Auth**: Firebase Anonymous Auth
-- **Project**: `pineapple-poker-8f3` — emulator-only for now
+- **Project**: `pineapple-poker-8f3` — live at https://pineapple-poker-8f3.web.app (emulators for local dev)
 - **Monorepo**: npm workspaces with single lockfile
 
 ### npm Workspaces
@@ -139,16 +142,15 @@ Room IDs are 6-char alphanumeric codes (no ambiguous chars I/O/0/1). Multiple ga
 
 ### Game flow
 
-**Cloud Functions** (`functions/src/`) — 12 callables + 1 scheduled. Player-facing ones require `roomId` in request data.
+**Cloud Functions** (`functions/src/`) — 10 callables + 1 scheduled. Player-facing ones require `roomId` in request data.
 
 Player actions (`player-actions.ts`):
 1. **joinGame** — creates room (if `create: true`) or adds player to existing room
 2. **leaveGame** — removes player entirely
 3. **placeCards** — validates & applies card placements
-4. **startMatch** — host starts the match (accepts `runMode` for Pineapple Run)
+4. **startMatch** — host starts the match (optionally passing `settings`)
 5. **playAgain** — host restarts after match complete
 6. **addBot** / **removeBot** — manage bot players
-7. **pickCharm** / **pickMutation** — run-mode drafting during `charm_pick`
 
 Admin (`admin-actions.ts`): **adminDeleteRoom**, **adminKickPlayer**, **adminKillAllGames** — all gated to the admin email.
 
@@ -170,9 +172,8 @@ Game engine in `dealer/src/game-engine.ts` — all functions take `(db, roomId)`
 - `resetForNextRound(db, roomId)` — promote observers, reset state
 - `handlePhaseTimeout(db, roomId)` — auto-foul players who haven't placed
 - `checkAndAdvance(db, roomId)` — check all placed and advance (recursive for all-fouled cases)
-- Run mode also flows through these: `maybeStartRound` applies a player's owned deck mutations before shuffling; `scoreRound` adds charm bonuses + foul-shield reductions and rolls the next round's charm/mutation options, transitioning to `charm_pick`.
 
-Phases: `lobby` → `initial_deal` → `street_2` → `street_3` → `street_4` → `street_5` → `scoring` → (`charm_pick`, run mode only) → `complete` / `match_complete`
+Phases: `lobby` → `initial_deal` → `street_2` → `street_3` → `street_4` → `street_5` → `scoring` → `complete` / `match_complete`
 
 ### Match Settings
 
@@ -182,12 +183,11 @@ Configurable per-room via `MatchSettings` (stored in game doc as `settings`):
 
 Host sets settings in Lobby UI before starting. In dev mode, `?timeout=5000` URL param pre-fills the dropdown.
 
-### Game Modes
+### Game Mode
 
-Two modes share the same engine, selected by the host via the `runMode` flag passed to `startMatch`:
+Classic OFC Pineapple only: a 3-round match (`ROUNDS_PER_MATCH`). Unlike table OFC (max 3 players, turn-based, shared deck), this game deals each player their **own** shuffled 52-card deck and everyone places **simultaneously** against a shared street timer — which is what lets a room hold up to `MAX_PLAYERS` players with no waiting. Scoring is pairwise across all active players.
 
-- **Classic OFC Pineapple** (default): 3 rounds.
-- **Pineapple Run** (roguelike deckbuilder, `runMode: true`): 5 rounds (`ROUNDS_PER_RUN`). Between rounds the game enters the `charm_pick` phase where players draft a **charm** (score bonus, `shared/game-logic/charms.ts`) and a **deck mutation** (permanent personal-deck change, `shared/game-logic/mutations.ts`). Charms/mutations stack across rounds. Run-mode state lives on the game doc (`runMode`, `charms`, `charmOptions`, `charmPicks`, `charmBonuses`, `mutations`, `mutationOptions`, `mutationPicks` — see `shared/core/types.ts`). Picks go through the `pickCharm` / `pickMutation` Cloud Functions; UI in `frontend/src/components/CharmPickPage.tsx`.
+A roguelike "Pineapple Run" mode existed and was removed (#64). `GameState` keeps its fields (`runMode`, `charms`, `mutations`, etc. in `shared/core/types.ts`) and `GamePhase.CharmPick` as **vestigial optional schema fields** so old prod Firestore docs still parse; `playAgain` scrubs them. Nothing writes them anymore.
 
 ### Timeout = Auto-Place
 
@@ -207,11 +207,12 @@ Players who join mid-round become observers (added to `players` but NOT `playerO
 ### Frontend patterns
 
 - URL-based room routing: `/?room=ABCD12` query param, no routing library
-- `RoomSelector` → Create Room / Join Room → `Lobby` → `GamePage`
+- `RoomSelector` → Create Room / Join Room → `Lobby` → `MobileGamePage`
 - State comes from real-time Firestore listeners via hooks (`useGameState(roomId)`, `usePlayerHand(uid, roomId)`, `useAuth`)
 - No global state management — hooks + component state only
-- `App.tsx` manages `roomId` URL state, routes between `RoomSelector` / `Lobby` / `GamePage`
-- Card placement UI state (selections, placements, discards) lives in `GamePage` component state
+- `App.tsx` manages `roomId` URL state, routes between `RoomSelector` / `Lobby` / `MobileGamePage`
+- Seat recovery: while seated, the room code persists to localStorage (`useResumableGame`); the home screen offers a "Rejoin" banner if the saved game still exists and the uid still has a seat
+- Card placement UI state (selections, placements, discards) lives in `MobileGamePage` component state
 - Cloud Functions called via `httpsCallable` from firebase/functions SDK — all include `roomId`
 - Frontend imports shared code via `@shared/` alias (e.g., `import type { Card } from '@shared/core/types'`)
 
