@@ -62,6 +62,12 @@ export const SCOOP_BONUS = 3;
 /** Number of cards dealt on the initial street. */
 export const INITIAL_DEAL_COUNT = 5;
 
+/** Cards dealt all at once to a Fantasy Land player (place 13, discard 1). */
+export const FL_DEAL_COUNT = 14;
+
+/** Total cards on a complete board (3 + 5 + 5). */
+export const BOARD_CARD_COUNT = 13;
+
 /** Number of cards dealt on streets 2-5. */
 export const STREET_DEAL_COUNT = 3;
 

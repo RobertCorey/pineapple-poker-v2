@@ -4,7 +4,7 @@ import { useSoundEffects } from '../../audio/useSoundEffects.ts';
 import { useTickSound } from '../../audio/useTickSound.ts';
 import type { Card, Row, Board } from '@shared/core/types';
 import { GamePhase } from '@shared/core/types';
-import { INITIAL_DEAL_COUNT, STREET_PLACE_COUNT, DEFAULT_MATCH_SETTINGS } from '@shared/core/constants';
+import { INITIAL_DEAL_COUNT, STREET_PLACE_COUNT, DEFAULT_MATCH_SETTINGS, BOARD_CARD_COUNT, TOTAL_STREETS } from '@shared/core/constants';
 import { isFoul } from '@shared/game-logic/scoring';
 import { placeCards, leaveGame } from '../../api.ts';
 import { trackEvent } from '../../firebase.ts';
@@ -119,9 +119,13 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
   const opponentSize = useContainerSize(opponentRef);
   const playerSize = useContainerSize(playerRef);
 
+  // Fantasy Land: this player sets their whole board (13 of 14 cards) on a
+  // whole-round deadline, independent of the table's street pacing.
+  const isFL = !!gameState.players[uid]?.fantasyLand;
   const countdown = useCountdown(gameState.phaseDeadline);
+  const flCountdown = useCountdown(gameState.flDeadline ?? null);
   const isPlacementPhase = gameState.phase === GamePhase.InitialDeal || STREET_PHASES.has(gameState.phase);
-  useTickSound(countdown, isPlacementPhase && !submitting);
+  useTickSound(isFL ? flCountdown : countdown, isPlacementPhase && !submitting);
   const showTimer = (
     gameState.phase === GamePhase.InitialDeal || STREET_PHASES.has(gameState.phase)
   );
@@ -131,17 +135,24 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
 
   const isInitialDeal = gameState.phase === GamePhase.InitialDeal;
   const isStreet = STREET_PHASES.has(gameState.phase);
-  const requiredPlacements = isInitialDeal ? INITIAL_DEAL_COUNT : STREET_PLACE_COUNT;
+  const requiredPlacements = isFL
+    ? BOARD_CARD_COUNT
+    : isInitialDeal ? INITIAL_DEAL_COUNT : STREET_PLACE_COUNT;
 
   const showRoundOverlay = isRoundComplete && !isMatchComplete;
 
-  // Reset placement state when phase changes
+  // Reset placement state when phase changes — except for a Fantasy Land
+  // player while the table moves between streets: their 14-card hand and
+  // in-progress placements span those transitions.
   const [prevPhase, setPrevPhase] = useState(gameState.phase);
   if (prevPhase !== gameState.phase) {
     setPrevPhase(gameState.phase);
-    setPlacements([]);
-    setSelectedIndex(null);
-    setSubmitting(false);
+    const flSpanningStreets = isFL && STREET_PHASES.has(gameState.phase);
+    if (!flSpanningStreets) {
+      setPlacements([]);
+      setSelectedIndex(null);
+      setSubmitting(false);
+    }
   }
 
   // Track placements by their stable hand index, NOT by card identity, so the
@@ -209,9 +220,10 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
         }));
 
         const placedIdxSet = new Set(newPlacements.map((p) => p.handIndex));
-        // Discard = the one card we didn't place this street, identified by
-        // its hand index so duplicates don't break the lookup.
-        const discardEntry = isStreet
+        // Discard = the one card we didn't place, identified by its hand
+        // index so duplicates don't break the lookup. Streets discard 1 of 3;
+        // Fantasy Land discards 1 of 14.
+        const discardEntry = (isStreet || isFL)
           ? hand
               .map((c, idx) => ({ card: c, idx }))
               .find(({ idx }) => !placedIdxSet.has(idx))
@@ -304,14 +316,22 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
       </div>
 
       {/* Turn timer: depleting bar under the header (replaces a numeric countdown).
-          The ≤10s warning banner below still spells out the seconds. */}
-      {showTimer && gameState.phaseDeadline != null && (
+          The ≤10s warning banner below still spells out the seconds. A Fantasy
+          Land player sees their whole-round deadline instead of street pacing. */}
+      {showTimer && (isFL ? gameState.flDeadline != null : gameState.phaseDeadline != null) && (
         <TimerBar
-          deadline={gameState.phaseDeadline}
-          totalMs={gameState.settings?.turnTimeoutMs ?? DEFAULT_MATCH_SETTINGS.turnTimeoutMs}
-          urgent={countdown <= 10}
-          secondsLeft={countdown}
+          deadline={isFL ? gameState.flDeadline! : gameState.phaseDeadline!}
+          totalMs={(gameState.settings?.turnTimeoutMs ?? DEFAULT_MATCH_SETTINGS.turnTimeoutMs) * (isFL ? TOTAL_STREETS : 1)}
+          urgent={(isFL ? flCountdown : countdown) <= 10}
+          secondsLeft={isFL ? flCountdown : countdown}
         />
+      )}
+
+      {/* Fantasy Land banner */}
+      {isFL && isPlacementPhase && hand.length > 0 && (
+        <div className="bg-purple-900/80 border-b border-purple-700 px-2 py-0.5 text-center text-[10px] text-purple-200 flex-shrink-0">
+          🌈 Fantasy Land — set your whole board: place 13, discard 1
+        </div>
       )}
 
       {/* Observer banner */}
@@ -344,15 +364,16 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
                 cardWidthPx={playerCardW}
                 score={currentPlayer.score}
                 rank={playerRank}
+                fantasyLand={currentPlayer.fantasyLand}
               />
             )}
           </div>
 
           {/* Low-time warning — placement is easy to lose track of; make the
               impending auto-place unmissable when the player still has cards. */}
-          {showTimer && countdown > 0 && countdown <= 10 && !isObserver && hand.length > 0 && !submitting && (
+          {showTimer && (isFL ? flCountdown : countdown) > 0 && (isFL ? flCountdown : countdown) <= 10 && !isObserver && hand.length > 0 && !submitting && (
             <div className="bg-red-700 text-white text-center text-xs font-bold py-1 animate-pulse flex-shrink-0">
-              ⏰ {countdown}s left — place your cards!
+              ⏰ {isFL ? flCountdown : countdown}s left — place your cards!
             </div>
           )}
 

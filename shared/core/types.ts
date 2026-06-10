@@ -104,6 +104,12 @@ export interface PlayerState {
   fouled: boolean;
   score: number;
   isBot?: boolean;
+  /** In Fantasy Land this round: dealt all 14 cards at once, sets the whole
+   *  board in one submission, exempt from street pacing. */
+  fantasyLand?: boolean;
+  /** Earned Fantasy Land for the next round of this match (set at scoring,
+   *  consumed by resetForNextRound). */
+  nextFantasyLand?: boolean;
 }
 
 /** Subcollection document: games/{roomId}/hands/{uid} */
@@ -153,6 +159,9 @@ export interface GameState {
   createdAt: number;
   updatedAt: number;
   phaseDeadline: number | null;  // Unix timestamp when phase expires
+  /** Whole-round deadline for Fantasy Land players (roundStart + 5 × turnTimeoutMs).
+   *  Null/absent when nobody is in Fantasy Land this round. */
+  flDeadline?: number | null;
   // ---- Legacy run-mode fields (feature removed) ----
   // Kept as optional so old Firestore docs written while "Pineapple Run" was
   // live still parse. Nothing writes these anymore; playAgain scrubs them.

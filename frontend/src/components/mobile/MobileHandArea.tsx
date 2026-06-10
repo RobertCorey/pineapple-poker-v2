@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import type { Card, GameState, Row } from '@shared/core/types';
 import { GamePhase } from '@shared/core/types';
-import { INITIAL_DEAL_COUNT, STREET_PLACE_COUNT } from '@shared/core/constants';
+import { INITIAL_DEAL_COUNT, STREET_PLACE_COUNT, BOARD_CARD_COUNT } from '@shared/core/constants';
 import { CardComponent, CARD_ASPECT } from '../CardComponent.tsx';
 import { boardCardCount } from '../../utils/card-utils.ts';
 import type { Placement } from '../../utils/card-utils.ts';
@@ -47,9 +47,11 @@ export function MobileHandArea({
   placements, submitting, cardWidthPx, onDropCard,
 }: MobileHandAreaProps) {
   const isInitialDeal = gameState.phase === GamePhase.InitialDeal;
-  const requiredPlacements = isInitialDeal ? INITIAL_DEAL_COUNT : STREET_PLACE_COUNT;
-
   const player = gameState.players[uid];
+  const isFL = !!player?.fantasyLand;
+  const requiredPlacements = isFL
+    ? BOARD_CARD_COUNT
+    : isInitialDeal ? INITIAL_DEAL_COUNT : STREET_PLACE_COUNT;
   const alreadyPlaced = player ? boardCardCount(player.board) : 0;
   const waitingForOthers = isInitialDeal
     ? alreadyPlaced >= INITIAL_DEAL_COUNT && hand.length === 0
@@ -141,17 +143,22 @@ export function MobileHandArea({
     showCards = true;
   }
 
-  const cardH = Math.round(cardWidthPx * CARD_ASPECT);
-  const cardGap = Math.max(4, Math.round(cardWidthPx * 0.15));
+  // Fantasy Land hands (14 cards) shrink and wrap into two rows of ≤7.
+  const bigHand = availableHand.length > 7;
+  const cardW = bigHand ? Math.max(26, Math.round(cardWidthPx * 0.62)) : cardWidthPx;
+  const cardH = Math.round(cardW * CARD_ASPECT);
+  const cardGap = Math.max(4, Math.round(cardW * 0.15));
+  const handRows = bigHand ? 2 : 1;
+  const handMaxW = bigHand ? 7 * cardW + 6 * cardGap + 1 : undefined;
 
   return (
     <div className="border-t border-gray-700 px-2 py-2 flex-shrink-0">
       <div
         className="flex items-center justify-center"
-        style={{ minHeight: cardH + 8 }}
+        style={{ minHeight: handRows * cardH + (handRows - 1) * cardGap + 8 }}
       >
         {showCards && !allPlaced ? (
-          <div className="flex justify-center" style={{ gap: cardGap }}>
+          <div className="flex justify-center flex-wrap" style={{ gap: cardGap, maxWidth: handMaxW }}>
             {availableHand.map(({ card, handIndex }, i) => (
               <div
                 key={handIndex}
@@ -165,7 +172,7 @@ export function MobileHandArea({
               >
                 <CardComponent
                   card={card}
-                  widthPx={cardWidthPx}
+                  widthPx={cardW}
                   selected={selectedIndex === i}
                   onClick={() => handleCardClick(i)}
                 />
@@ -184,11 +191,11 @@ export function MobileHandArea({
         <div
           className="fixed z-[200] pointer-events-none opacity-90 drop-shadow-xl"
           style={{
-            left: drag.x - cardWidthPx / 2,
+            left: drag.x - cardW / 2,
             top: drag.y - cardH * 0.75,
           }}
         >
-          <CardComponent card={availableHand[drag.index].card} widthPx={cardWidthPx} />
+          <CardComponent card={availableHand[drag.index].card} widthPx={cardW} />
         </div>
       )}
 

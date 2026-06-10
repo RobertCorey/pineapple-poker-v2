@@ -64,6 +64,8 @@ export const PlayerStateSchema = z.object({
   fouled: z.boolean(),
   score: z.number(),
   isBot: z.boolean().optional(),
+  fantasyLand: z.boolean().optional(),
+  nextFantasyLand: z.boolean().optional(),
 });
 
 // ---- Round results ----
@@ -96,6 +98,7 @@ export const GameStateSchema = z.object({
   createdAt: z.number(),
   updatedAt: z.number(),
   phaseDeadline: z.number().nullable(),
+  flDeadline: z.number().nullable().optional(),
   // Run mode (optional — present only for roguelike runs)
   runMode: z.boolean().optional(),
   charms: z.record(z.string(), z.array(z.string())).optional(),
