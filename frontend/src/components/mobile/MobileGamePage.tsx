@@ -14,7 +14,7 @@ import type { Placement } from '../../utils/card-utils.ts';
 import { PlayerBoard } from '../PlayerBoard.tsx';
 import { Toast } from '../Toast.tsx';
 import { MobileOpponentGrid } from './MobileOpponentGrid.tsx';
-import { MobileHandArea } from './MobileHandArea.tsx';
+import { MobileHandArea, type HandSort } from './MobileHandArea.tsx';
 import { MobileRoundOverlay } from './MobileRoundOverlay.tsx';
 import { MobileMatchOverlay } from './MobileMatchOverlay.tsx';
 import { TimerBar } from './TimerBar.tsx';
@@ -25,6 +25,9 @@ const STREET_PHASES = new Set<string>([
   GamePhase.Street4,
   GamePhase.Street5,
 ]);
+
+/** Display order for suit sorting: spades, hearts, diamonds, clubs. */
+const SUIT_SORT_ORDER: Record<string, number> = { s: 0, h: 1, d: 2, c: 3 };
 
 // --- Card size computation ---
 
@@ -98,6 +101,7 @@ interface MobileGamePageProps {
 export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: MobileGamePageProps) {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [placements, setPlacements] = useState<Placement[]>([]);
+  const [handSort, setHandSort] = useState<HandSort>('deal');
   const [submitting, setSubmitting] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [muted, setMuted] = useState(() => SoundEngine.get().muted);
@@ -161,6 +165,24 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
   const availableHand = hand
     .map((card, handIndex) => ({ card, handIndex }))
     .filter(({ handIndex }) => !placedHandIndices.has(handIndex));
+
+  // Display sort for the hand (especially useful for 14-card Fantasy Land
+  // hands). Sorting reorders display positions only — placements stay keyed
+  // by handIndex, so undo/discard/drag are unaffected.
+  if (handSort === 'rank') {
+    availableHand.sort(
+      (a, b) => b.card.rank - a.card.rank || SUIT_SORT_ORDER[a.card.suit] - SUIT_SORT_ORDER[b.card.suit],
+    );
+  } else if (handSort === 'suit') {
+    availableHand.sort(
+      (a, b) => SUIT_SORT_ORDER[a.card.suit] - SUIT_SORT_ORDER[b.card.suit] || b.card.rank - a.card.rank,
+    );
+  }
+
+  const handleChangeSort = (sort: HandSort) => {
+    setHandSort(sort);
+    setSelectedIndex(null); // positions shift under the selection
+  };
 
   const player = gameState.players[uid];
   // Only merge optimistic placements onto the board while the server still
@@ -389,6 +411,8 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
             submitting={submitting}
             cardWidthPx={playerCardW}
             onDropCard={placeCardAt}
+            handSort={handSort}
+            onChangeSort={handleChangeSort}
           />
         </div>
       </div>

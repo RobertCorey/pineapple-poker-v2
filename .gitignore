@@ -40,6 +40,8 @@ dealer/lib
 
 # Screenshots and Playwright
 *.png
+# …but app icons are real assets
+!frontend/public/*.png
 .playwright-mcp/
 test-results/
 

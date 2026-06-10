@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useSyncExternalStore } from 'react';
+import { installAvailable, onInstallChange, promptInstall } from '../pwa-install.ts';
 import type { Card } from '@shared/core/types';
 import { Suit, Rank } from '@shared/core/types';
 import { joinGame } from '../api.ts';
@@ -61,6 +62,7 @@ export function RoomSelector({ displayName, setDisplayName, signIn, onRoomJoined
   const [joining, setJoining] = useState(false);
   const [showRules, setShowRules] = useState(false);
   const { message: toast, showToast } = useToast();
+  const canInstall = useSyncExternalStore(onInstallChange, installAvailable);
 
   const handleCreate = async () => {
     if (!nameInput.trim()) return;
@@ -203,6 +205,15 @@ export function RoomSelector({ displayName, setDisplayName, signIn, onRoomJoined
           >
             New here? How to play
           </button>
+          {canInstall && (
+            <button
+              onClick={() => void promptInstall()}
+              data-testid="install-app"
+              className="block mx-auto mt-3 px-3 py-1.5 rounded-lg border border-green-700/60 bg-green-900/30 text-green-300 text-xs hover:bg-green-900/50 transition-colors"
+            >
+              📲 Install the app
+            </button>
+          )}
           <p className="text-[10px] text-gray-600 mt-3">Free · plays in your browser · share the link to invite</p>
         </div>
       </main>

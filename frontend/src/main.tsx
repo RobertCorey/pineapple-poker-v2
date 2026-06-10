@@ -1,6 +1,7 @@
 import { StrictMode, lazy, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
+import './pwa-install.ts'
 import App from './App.tsx'
 
 const PreviewPage = lazy(() => import('./preview/PreviewPage.tsx').then(m => ({ default: m.PreviewPage })));
