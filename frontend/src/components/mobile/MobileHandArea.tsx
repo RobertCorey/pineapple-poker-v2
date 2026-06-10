@@ -22,8 +22,14 @@ interface MobileHandAreaProps {
   onDropCard: (availIndex: number, row: Row) => void;
 }
 
-/** Movement (px) before a touch/press becomes a drag instead of a tap. */
+/** Movement (px) before a touch press becomes a drag instead of a tap. */
 const DRAG_THRESHOLD = 8;
+
+/** Drag is touch-only: with a mouse/trackpad, click-click is faster and a
+ *  wobbly click would otherwise become an accidental drag. The hint text
+ *  follows the device's primary pointer. */
+const COARSE_POINTER =
+  typeof window !== 'undefined' && window.matchMedia('(any-pointer: coarse)').matches;
 
 /** Map a drop point to a row on the player's own board, or null. Opponent
  *  boards render the same row testids, so require the my-board ancestor. */
@@ -69,6 +75,7 @@ export function MobileHandArea({
 
   const handlePointerDown = (index: number) => (e: React.PointerEvent<HTMLDivElement>) => {
     if (submitting) return;
+    if (e.pointerType !== 'touch') return; // mouse/trackpad: click-click only
     pressRef.current = { index, x: e.clientX, y: e.clientY };
     // Deliberately NOT capturing the pointer here: capture retargets the
     // press's eventual click at this wrapper instead of the card, which
@@ -88,8 +95,13 @@ export function MobileHandArea({
       const dist = Math.hypot(e.clientX - press.x, e.clientY - press.y);
       if (dist < DRAG_THRESHOLD) return;
       // Becoming a drag: capture so tracking continues outside the card, and
-      // select it so the board rows light up as targets.
-      e.currentTarget.setPointerCapture(e.pointerId);
+      // select it so the board rows light up as targets. Capture can throw on
+      // synthetic pointer events (tests); tracking still works without it.
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      } catch {
+        /* synthetic pointer — no capture */
+      }
       onSelectCard(press.index);
     }
     setDrag({ index: press.index, x: e.clientX, y: e.clientY });
@@ -179,7 +191,9 @@ export function MobileHandArea({
       <div className="text-[10px] text-gray-500 text-center mt-1">
         {showCards && !allPlaced ? (
           <>
-            {selectedIndex !== null ? 'Tap a row to place' : 'Tap or drag a card'}
+            {selectedIndex !== null
+              ? 'Tap a row to place'
+              : COARSE_POINTER ? 'Tap or drag a card' : 'Tap a card to select'}
             {placements.length > 0 && (
               <span className="ml-1 text-gray-600">
                 ({placements.length}/{requiredPlacements}) · tap a placed card to undo

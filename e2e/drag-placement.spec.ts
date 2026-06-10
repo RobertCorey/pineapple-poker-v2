@@ -3,21 +3,28 @@ import { setupTwoPlayerGame } from './helpers/game-setup';
 import { T_JOIN } from './helpers/timeouts';
 
 /**
- * Drag-and-drop placement tests. The hand supports two input styles on the
- * same cards: tap-to-select → tap-row, and drag-onto-row. These exercise the
- * drag path AND verify the tap path still works in the same session — pointer
- * capture bugs are notorious for breaking taps only after/around drags.
+ * Drag-and-drop placement tests. Drag is touch-only (mouse/trackpad players
+ * use tap-tap), so drags are driven with synthetic pointer events carrying
+ * pointerType 'touch'. These exercise the drag path AND verify the tap path
+ * still works around drags — pointer capture bugs are notorious for breaking
+ * taps only after/around drags.
  */
 
-/** Drag from the center of one locator to the center of another with enough
- *  intermediate moves to cross the in-app 8px drag threshold. */
-async function dragTo(page: Page, fromTestId: string, to: { x: number; y: number }) {
-  const from = page.getByTestId(fromTestId);
-  const box = (await from.boundingBox())!;
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(to.x, to.y, { steps: 15 });
-  await page.mouse.up();
+const TOUCH = { pointerId: 7, pointerType: 'touch', isPrimary: true, bubbles: true };
+
+/** Drag a hand card to a point via synthetic touch pointer events, with
+ *  enough intermediate moves to cross the in-app 8px drag threshold. */
+async function touchDrag(page: Page, fromTestId: string, to: { x: number; y: number }) {
+  const card = page.getByTestId(fromTestId);
+  const box = (await card.boundingBox())!;
+  const from = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  await card.dispatchEvent('pointerdown', { ...TOUCH, buttons: 1, clientX: from.x, clientY: from.y });
+  for (let i = 1; i <= 6; i++) {
+    const x = from.x + ((to.x - from.x) * i) / 6;
+    const y = from.y + ((to.y - from.y) * i) / 6;
+    await card.dispatchEvent('pointermove', { ...TOUCH, buttons: 1, clientX: x, clientY: y });
+  }
+  await card.dispatchEvent('pointerup', { ...TOUCH, buttons: 0, clientX: to.x, clientY: to.y });
 }
 
 async function centerOf(page: Page, parentTestId: string, testId: string) {
@@ -25,7 +32,7 @@ async function centerOf(page: Page, parentTestId: string, testId: string) {
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
 }
 
-test('drag places a card, off-board drag cancels, tap-tap still works after drags', async ({ browser }) => {
+test('touch drag places a card, off-board drag cancels, mouse drag does not start, tap-tap works throughout', async ({ browser }) => {
   const { alice, cleanup } = await setupTwoPlayerGame(browser);
 
   await alice.getByTestId('start-match-button').click();
@@ -35,26 +42,37 @@ test('drag places a card, off-board drag cancels, tap-tap still works after drag
   const board = alice.getByTestId('my-board');
   const bottomRow = board.getByTestId('row-bottom');
 
-  // --- Drag a card onto the bottom row: it should be placed ---
-  await dragTo(alice, 'hand-card-0', await centerOf(alice, 'my-board', 'row-bottom'));
+  // --- Touch-drag a card onto the bottom row: it should be placed ---
+  await touchDrag(alice, 'hand-card-0', await centerOf(alice, 'my-board', 'row-bottom'));
   await expect(bottomRow.locator('.select-none')).toHaveCount(1);
   await expect(alice.getByTestId('hand-card-3')).toBeVisible();
   await expect(alice.getByTestId('hand-card-4')).not.toBeVisible();
 
-  // --- Drag released off-board: cancels, nothing placed, nothing lost ---
-  await dragTo(alice, 'hand-card-0', { x: 15, y: 15 });
+  // --- Touch drag released off-board: cancels, nothing placed, nothing lost ---
+  await touchDrag(alice, 'hand-card-0', { x: 15, y: 15 });
   await expect(bottomRow.locator('.select-none')).toHaveCount(1);
   await expect(alice.getByTestId('hand-card-3')).toBeVisible();
 
-  // --- Tap-tap still works after dragging (pointer-capture regression) ---
+  // --- Mouse drag must NOT start a drag (drag is touch-only): the gesture
+  //     ends as a click on the card, which just selects it ---
+  const cardBox = (await alice.getByTestId('hand-card-0').boundingBox())!;
+  const rowMid = await centerOf(alice, 'my-board', 'row-middle');
+  await alice.mouse.move(cardBox.x + cardBox.width / 2, cardBox.y + cardBox.height / 2);
+  await alice.mouse.down();
+  await alice.mouse.move(rowMid.x, rowMid.y, { steps: 10 });
+  await alice.mouse.up();
+  await expect(board.getByTestId('row-middle').locator('.select-none')).toHaveCount(0);
+  await expect(alice.getByTestId('hand-card-3')).toBeVisible();
+
+  // --- Tap-tap still works after drags (pointer-capture regression) ---
   await alice.getByTestId('hand-card-0').click();
   await board.getByTestId('row-middle').click();
   await expect(board.getByTestId('row-middle').locator('.select-none')).toHaveCount(1);
   await expect(alice.getByTestId('hand-card-2')).toBeVisible();
   await expect(alice.getByTestId('hand-card-3')).not.toBeVisible();
 
-  // --- Mixed input finishing the deal: drag, then taps, auto-submit ---
-  await dragTo(alice, 'hand-card-0', await centerOf(alice, 'my-board', 'row-middle'));
+  // --- Mixed input finishing the deal: touch drag, then taps, auto-submit ---
+  await touchDrag(alice, 'hand-card-0', await centerOf(alice, 'my-board', 'row-middle'));
   await expect(board.getByTestId('row-middle').locator('.select-none')).toHaveCount(2);
 
   await alice.getByTestId('hand-card-0').click();
