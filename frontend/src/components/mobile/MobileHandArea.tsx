@@ -49,13 +49,14 @@ export function MobileHandArea({
     ? alreadyPlaced >= INITIAL_DEAL_COUNT && hand.length === 0
     : alreadyPlaced > 0 && hand.length === 0;
 
-  const handleCardClick = (index: number) => {
+  const handleCardClick = (index: number, e: React.MouseEvent) => {
     if (submitting) return;
     // Some browsers still fire a click on the source card right after a drag —
     // swallow it so a drop doesn't immediately re-select. Time-based (not a
     // sticky flag) because when the click targets the wrapper instead, a flag
-    // would never clear and would eat the next genuine tap.
-    if (Date.now() - dragEndAtRef.current < 300) return;
+    // would never clear and would eat the next genuine tap. Event timestamps
+    // share a clock, so no impure Date.now() in render scope.
+    if (e.timeStamp - dragEndAtRef.current < 300) return;
     onSelectCard(selectedIndex === index ? null : index);
   };
 
@@ -98,7 +99,7 @@ export function MobileHandArea({
     const endedDrag = drag;
     pressRef.current = null;
     if (!endedDrag) return; // plain tap — the card's onClick handles selection
-    dragEndAtRef.current = Date.now();
+    dragEndAtRef.current = e.timeStamp;
     const row = e.type === 'pointerup' ? rowAtPoint(e.clientX, e.clientY) : null;
     setDrag(null);
     if (row) {
@@ -149,7 +150,7 @@ export function MobileHandArea({
                   card={card}
                   widthPx={cardWidthPx}
                   selected={selectedIndex === i}
-                  onClick={() => handleCardClick(i)}
+                  onClick={(e) => handleCardClick(i, e)}
                 />
               </div>
             ))}
