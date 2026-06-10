@@ -55,14 +55,16 @@ export function MobileHandArea({
     ? alreadyPlaced >= INITIAL_DEAL_COUNT && hand.length === 0
     : alreadyPlaced > 0 && hand.length === 0;
 
-  const handleCardClick = (index: number, e: React.MouseEvent) => {
+  const handleCardClick = (index: number) => {
     if (submitting) return;
-    // Some browsers still fire a click on the source card right after a drag —
-    // swallow it so a drop doesn't immediately re-select. Time-based (not a
-    // sticky flag) because when the click targets the wrapper instead, a flag
-    // would never clear and would eat the next genuine tap. Event timestamps
-    // share a clock, so no impure Date.now() in render scope.
-    if (e.timeStamp - dragEndAtRef.current < 300) return;
+    // Some browsers fire a click on the source card right after a drag —
+    // swallow it so a drop doesn't immediately re-select. Gesture-scoped:
+    // the flag is cleared by the next pointerdown, so it can only ever eat
+    // the click belonging to the drag itself, never a later genuine tap.
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false;
+      return;
+    }
     onSelectCard(selectedIndex === index ? null : index);
   };
 
@@ -70,10 +72,13 @@ export function MobileHandArea({
   // pressRef tracks a press that may become a drag; drag is set once the
   // pointer moves past DRAG_THRESHOLD and drives the floating ghost card.
   const pressRef = useRef<{ index: number; x: number; y: number } | null>(null);
-  const dragEndAtRef = useRef(0);
+  const suppressClickRef = useRef(false);
   const [drag, setDrag] = useState<{ index: number; x: number; y: number } | null>(null);
 
   const handlePointerDown = (index: number) => (e: React.PointerEvent<HTMLDivElement>) => {
+    // Any new press starts a clean gesture — clear before the touch-only
+    // check so a mouse press after a touch drag can't inherit suppression.
+    suppressClickRef.current = false;
     if (submitting) return;
     if (e.pointerType !== 'touch') return; // mouse/trackpad: click-click only
     pressRef.current = { index, x: e.clientX, y: e.clientY };
@@ -111,7 +116,7 @@ export function MobileHandArea({
     const endedDrag = drag;
     pressRef.current = null;
     if (!endedDrag) return; // plain tap — the card's onClick handles selection
-    dragEndAtRef.current = e.timeStamp;
+    suppressClickRef.current = true;
     const row = e.type === 'pointerup' ? rowAtPoint(e.clientX, e.clientY) : null;
     setDrag(null);
     if (row) {
@@ -162,7 +167,7 @@ export function MobileHandArea({
                   card={card}
                   widthPx={cardWidthPx}
                   selected={selectedIndex === i}
-                  onClick={(e) => handleCardClick(i, e)}
+                  onClick={() => handleCardClick(i)}
                 />
               </div>
             ))}

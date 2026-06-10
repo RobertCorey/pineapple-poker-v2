@@ -39,7 +39,7 @@ interface CardProps {
   card: Card | null;
   widthPx: number;
   selected?: boolean;
-  onClick?: (e: React.MouseEvent<HTMLDivElement>) => void;
+  onClick?: () => void;
 }
 
 function cardStyles(w: number, rankLen: number) {
