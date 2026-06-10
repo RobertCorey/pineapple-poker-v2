@@ -6,6 +6,9 @@ import { CardComponent, CARD_ASPECT } from '../CardComponent.tsx';
 import { boardCardCount } from '../../utils/card-utils.ts';
 import type { Placement } from '../../utils/card-utils.ts';
 
+/** Hand display order: as dealt, by rank (high→low), or grouped by suit. */
+export type HandSort = 'deal' | 'rank' | 'suit';
+
 interface MobileHandAreaProps {
   hand: Card[];
   /** Cards still in hand, paired with their stable index in the original
@@ -20,6 +23,9 @@ interface MobileHandAreaProps {
   cardWidthPx: number;
   /** Drop a dragged card (by its position in availableHand) onto a row. */
   onDropCard: (availIndex: number, row: Row) => void;
+  handSort: HandSort;
+  /** Toggle hand sorting; tapping the active sort returns to deal order. */
+  onChangeSort: (sort: HandSort) => void;
 }
 
 /** Movement (px) before a touch press becomes a drag instead of a tap. */
@@ -44,7 +50,7 @@ function rowAtPoint(x: number, y: number): Row | null {
 
 export function MobileHandArea({
   hand, availableHand, gameState, uid, selectedIndex, onSelectCard,
-  placements, submitting, cardWidthPx, onDropCard,
+  placements, submitting, cardWidthPx, onDropCard, handSort, onChangeSort,
 }: MobileHandAreaProps) {
   const isInitialDeal = gameState.phase === GamePhase.InitialDeal;
   const player = gameState.players[uid];
@@ -199,22 +205,47 @@ export function MobileHandArea({
         </div>
       )}
 
-      {/* Instruction line — always rendered to prevent layout shift */}
-      <div className="text-[10px] text-gray-500 text-center mt-1">
-        {showCards && !allPlaced ? (
-          <>
-            {selectedIndex !== null
-              ? 'Tap a row to place'
-              : COARSE_POINTER ? 'Tap or drag a card' : 'Tap a card to select'}
-            {placements.length > 0 && (
-              <span className="ml-1 text-gray-600">
-                ({placements.length}/{requiredPlacements}) · tap a placed card to undo
-              </span>
-            )}
-          </>
-        ) : (
-          '\u00a0'
-        )}
+      {/* Instruction line — always rendered to prevent layout shift. Sort
+          toggles sit at the right edge; tapping the active one restores
+          deal order. */}
+      <div className="text-[10px] text-gray-500 mt-1 grid grid-cols-[1fr_auto_1fr] items-center">
+        <span />
+        <span className="text-center">
+          {showCards && !allPlaced ? (
+            <>
+              {selectedIndex !== null
+                ? 'Tap a row to place'
+                : COARSE_POINTER ? 'Tap or drag a card' : 'Tap a card to select'}
+              {placements.length > 0 && (
+                <span className="ml-1 text-gray-600">
+                  ({placements.length}/{requiredPlacements}) · tap a placed card to undo
+                </span>
+              )}
+            </>
+          ) : (
+            '\u00a0'
+          )}
+        </span>
+        <span className="text-right whitespace-nowrap">
+          {showCards && !allPlaced && (
+            <>
+              <button
+                data-testid="sort-rank"
+                onClick={() => onChangeSort(handSort === 'rank' ? 'deal' : 'rank')}
+                className={`px-1.5 py-0.5 rounded ${handSort === 'rank' ? 'text-green-400 bg-green-900/40' : 'text-gray-500 active:text-gray-300'}`}
+              >
+                A↓
+              </button>
+              <button
+                data-testid="sort-suit"
+                onClick={() => onChangeSort(handSort === 'suit' ? 'deal' : 'suit')}
+                className={`ml-1 px-1.5 py-0.5 rounded ${handSort === 'suit' ? 'text-green-400 bg-green-900/40' : 'text-gray-500 active:text-gray-300'}`}
+              >
+                ♠♥
+              </button>
+            </>
+          )}
+        </span>
       </div>
     </div>
   );
