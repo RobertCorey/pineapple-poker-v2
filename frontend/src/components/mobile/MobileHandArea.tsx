@@ -1,4 +1,5 @@
-import type { Card, GameState } from '@shared/core/types';
+import { useRef, useState } from 'react';
+import type { Card, GameState, Row } from '@shared/core/types';
 import { GamePhase } from '@shared/core/types';
 import { INITIAL_DEAL_COUNT, STREET_PLACE_COUNT } from '@shared/core/constants';
 import { CardComponent, CARD_ASPECT } from '../CardComponent.tsx';
@@ -17,11 +18,27 @@ interface MobileHandAreaProps {
   placements: Placement[];
   submitting: boolean;
   cardWidthPx: number;
+  /** Drop a dragged card (by its position in availableHand) onto a row. */
+  onDropCard: (availIndex: number, row: Row) => void;
+}
+
+/** Movement (px) before a touch/press becomes a drag instead of a tap. */
+const DRAG_THRESHOLD = 8;
+
+/** Map a drop point to a row on the player's own board, or null. Opponent
+ *  boards render the same row testids, so require the my-board ancestor. */
+function rowAtPoint(x: number, y: number): Row | null {
+  const el = document.elementFromPoint(x, y);
+  if (!el || !el.closest('[data-testid="my-board"]')) return null;
+  const rowEl = el.closest('[data-testid^="row-"]');
+  if (!rowEl) return null;
+  const row = rowEl.getAttribute('data-testid')!.slice('row-'.length);
+  return row === 'top' || row === 'middle' || row === 'bottom' ? (row as Row) : null;
 }
 
 export function MobileHandArea({
   hand, availableHand, gameState, uid, selectedIndex, onSelectCard,
-  placements, submitting, cardWidthPx,
+  placements, submitting, cardWidthPx, onDropCard,
 }: MobileHandAreaProps) {
   const isInitialDeal = gameState.phase === GamePhase.InitialDeal;
   const requiredPlacements = isInitialDeal ? INITIAL_DEAL_COUNT : STREET_PLACE_COUNT;
@@ -34,7 +51,52 @@ export function MobileHandArea({
 
   const handleCardClick = (index: number) => {
     if (submitting) return;
+    // A captured drag still ends in a synthetic click on the source card —
+    // swallow it so a drop doesn't immediately re-select a card.
+    if (justDraggedRef.current) {
+      justDraggedRef.current = false;
+      return;
+    }
     onSelectCard(selectedIndex === index ? null : index);
+  };
+
+  // --- Drag state ---
+  // pressRef tracks a press that may become a drag; drag is set once the
+  // pointer moves past DRAG_THRESHOLD and drives the floating ghost card.
+  const pressRef = useRef<{ index: number; x: number; y: number } | null>(null);
+  const justDraggedRef = useRef(false);
+  const [drag, setDrag] = useState<{ index: number; x: number; y: number } | null>(null);
+
+  const handlePointerDown = (index: number) => (e: React.PointerEvent<HTMLDivElement>) => {
+    if (submitting) return;
+    pressRef.current = { index, x: e.clientX, y: e.clientY };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const press = pressRef.current;
+    if (!press) return;
+    if (!drag) {
+      const dist = Math.hypot(e.clientX - press.x, e.clientY - press.y);
+      if (dist < DRAG_THRESHOLD) return;
+      // Becoming a drag: select the card so the board rows light up as targets.
+      onSelectCard(press.index);
+    }
+    setDrag({ index: press.index, x: e.clientX, y: e.clientY });
+  };
+
+  const handlePointerEnd = (e: React.PointerEvent<HTMLDivElement>) => {
+    const endedDrag = drag;
+    pressRef.current = null;
+    if (!endedDrag) return; // plain tap — the card's onClick handles selection
+    justDraggedRef.current = true;
+    const row = e.type === 'pointerup' ? rowAtPoint(e.clientX, e.clientY) : null;
+    setDrag(null);
+    if (row) {
+      onDropCard(endedDrag.index, row);
+    } else {
+      onSelectCard(null); // released off-board: cancel
+    }
   };
 
   const allPlaced = placements.length >= requiredPlacements;
@@ -64,7 +126,16 @@ export function MobileHandArea({
         {showCards && !allPlaced ? (
           <div className="flex justify-center" style={{ gap: cardGap }}>
             {availableHand.map(({ card, handIndex }, i) => (
-              <div key={handIndex} data-testid={`hand-card-${i}`}>
+              <div
+                key={handIndex}
+                data-testid={`hand-card-${i}`}
+                onPointerDown={handlePointerDown(i)}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerEnd}
+                onPointerCancel={handlePointerEnd}
+                className={drag?.index === i ? 'opacity-30' : ''}
+                style={{ touchAction: 'none' }}
+              >
                 <CardComponent
                   card={card}
                   widthPx={cardWidthPx}
@@ -81,11 +152,24 @@ export function MobileHandArea({
         )}
       </div>
 
+      {/* Floating ghost card that follows the pointer while dragging */}
+      {drag && availableHand[drag.index] && (
+        <div
+          className="fixed z-[200] pointer-events-none opacity-90 drop-shadow-xl"
+          style={{
+            left: drag.x - cardWidthPx / 2,
+            top: drag.y - cardH * 0.75,
+          }}
+        >
+          <CardComponent card={availableHand[drag.index].card} widthPx={cardWidthPx} />
+        </div>
+      )}
+
       {/* Instruction line — always rendered to prevent layout shift */}
       <div className="text-[10px] text-gray-500 text-center mt-1">
         {showCards && !allPlaced ? (
           <>
-            {selectedIndex !== null ? 'Tap a row to place' : 'Tap a card to select'}
+            {selectedIndex !== null ? 'Tap a row to place' : 'Tap or drag a card'}
             {placements.length > 0 && (
               <span className="ml-1 text-gray-600">
                 ({placements.length}/{requiredPlacements}) · tap a placed card to undo
