@@ -71,6 +71,8 @@ interface PlayerBoardProps {
   score?: number;
   disconnected?: boolean;
   rank?: number;
+  /** Player is in Fantasy Land this round. */
+  fantasyLand?: boolean;
   /** Count of trailing cards in each row that are optimistic (placed this turn,
    *  not yet submitted) and therefore takeable-back. */
   pendingByRow?: { top: number; middle: number; bottom: number };
@@ -92,7 +94,7 @@ function RowOverlay({ label, royalty, cardWidthPx }: { label: string; royalty: b
 
 export function PlayerBoard({
   board, playerName, fouled, isCurrentPlayer, onRowClick, hasCardSelected,
-  cardWidthPx, score, disconnected, rank, pendingByRow, onUndoCard,
+  cardWidthPx, score, disconnected, rank, fantasyLand, pendingByRow, onUndoCard,
 }: PlayerBoardProps) {
   const topSlots = padRow(board.top, 3);
   const middleSlots = padRow(board.middle, 5);
@@ -174,6 +176,7 @@ export function PlayerBoard({
         {rank !== undefined && (
           <span className="text-yellow-400 flex-shrink-0">{rank === 1 ? '\u{1F451}' : `#${rank}`}</span>
         )}
+        {fantasyLand && <span className="flex-shrink-0" title="Fantasy Land">🌈</span>}
         {fouled && <span className="text-red-400 flex-shrink-0">[F]</span>}
         {disconnected && <span className="text-red-500 flex-shrink-0">[DC]</span>}
       </div>

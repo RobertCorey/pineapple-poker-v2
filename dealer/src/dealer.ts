@@ -163,9 +163,12 @@ export class Dealer {
         this.scheduleBotPlacements(roomId, game);
       }
 
+      // Fantasy Land players place on their own whole-round clock — they
+      // don't gate street advancement (the engine re-checks authoritatively,
+      // including the street_5 → scoring hold for unfinished FL boards).
       const allPlaced = game.playerOrder.every((uid) => {
         const p = game.players[uid];
-        return !p || p.fouled || p.currentHand.length === 0;
+        return !p || p.fouled || p.fantasyLand || p.currentHand.length === 0;
       });
       if (allPlaced) {
         console.log(`[Dealer] [${roomId}] All placed in ${game.phase} — advancing`);

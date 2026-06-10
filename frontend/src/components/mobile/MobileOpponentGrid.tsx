@@ -59,6 +59,7 @@ export function MobileOpponentGrid({ gameState, currentUid, cardWidthPx, cols }:
                 score={player.score}
                 disconnected={player.disconnected}
                 rank={rankByUid.get(uid)}
+                fantasyLand={player.fantasyLand}
               />
             );
           })}

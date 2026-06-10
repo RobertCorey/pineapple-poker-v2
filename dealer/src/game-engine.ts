@@ -12,22 +12,39 @@ import {
   TOTAL_STREETS,
   TOP_ROW_SIZE,
   FIVE_CARD_ROW_SIZE,
+  FL_DEAL_COUNT,
+  BOARD_CARD_COUNT,
 } from '../../shared/core/constants';
 import { createShuffledDeck, dealCards } from '../../shared/game-logic/deck';
 import { scoreAllPlayers, isFoul } from '../../shared/game-logic/scoring';
+import { qualifiesForFantasyLand, staysInFantasyLand } from '../../shared/game-logic/fantasy-land';
 import { gameDoc, handDoc, deckDoc } from '../../shared/core/firestore-paths';
 import { emptyBoard, phaseForStreet } from '../../shared/game-logic/board-utils';
 import { parseGameState, parseDeckDoc } from '../../shared/core/schemas';
 import { botPlaceInitialDeal, botPlaceStreet } from './bot-strategy';
 
 // ---- Helper: all active (non-fouled) players have placed their cards ----
+// Fantasy Land players set their whole board on their own whole-round clock,
+// so street pacing exempts them; only the street_5 → scoring transition
+// requires their board to be done (callers check flPending for that).
 function allActivePlaced(
   players: Record<string, PlayerState>,
   playerOrder: string[],
 ): boolean {
   return playerOrder.every((uid) => {
     const p = players[uid];
-    return !p || p.fouled || p.currentHand.length === 0;
+    return !p || p.fouled || p.fantasyLand || p.currentHand.length === 0;
+  });
+}
+
+/** A non-fouled Fantasy Land player still has cards to place. */
+function flPending(
+  players: Record<string, PlayerState>,
+  playerOrder: string[],
+): boolean {
+  return playerOrder.some((uid) => {
+    const p = players[uid];
+    return !!p && !p.fouled && !!p.fantasyLand && p.currentHand.length > 0;
   });
 }
 
@@ -67,14 +84,18 @@ export async function maybeStartRound(db: Firestore, roomId: string): Promise<bo
     // Need at least 2 players to start
     if (game.playerOrder.length < 2) return false;
 
-    // Deal cards to all players in playerOrder
+    // Deal cards to all players in playerOrder. Fantasy Land players get
+    // their whole allotment now and place on a whole-round deadline.
     const now = Date.now();
     const phaseDeadline = now + game.settings.turnTimeoutMs;
+    const anyFL = game.playerOrder.some((uid) => game.players[uid]?.fantasyLand);
+    const flDeadline = anyFL ? now + TOTAL_STREETS * game.settings.turnTimeoutMs : null;
     const updatedPlayers: Record<string, PlayerState> = {};
 
     for (const uid of game.playerOrder) {
+      const fl = !!game.players[uid]?.fantasyLand;
       const deck = createShuffledDeck();
-      const { dealt, remaining } = dealCards(deck, INITIAL_DEAL_COUNT);
+      const { dealt, remaining } = dealCards(deck, fl ? FL_DEAL_COUNT : INITIAL_DEAL_COUNT);
 
       updatedPlayers[uid] = {
         ...game.players[uid],
@@ -104,6 +125,7 @@ export async function maybeStartRound(db: Firestore, roomId: string): Promise<bo
       street: 1,
       players: updatedPlayers,
       phaseDeadline,
+      flDeadline,
       updatedAt: now,
     });
 
@@ -137,12 +159,19 @@ export async function advanceStreet(db: Firestore, roomId: string): Promise<'sco
       return 'noop';
     }
 
-    // Verify all active players have placed
+    // Verify all active players have placed (Fantasy Land players exempt —
+    // they place on their own whole-round clock)
     if (!allActivePlaced(game.players, game.playerOrder)) {
       return 'noop';
     }
 
     if (game.street >= TOTAL_STREETS) {
+      // Scoring needs every board complete — hold street_5 while a Fantasy
+      // Land player is still placing. Their flDeadline timeout (or their
+      // submission) will re-trigger advancement.
+      if (flPending(game.players, game.playerOrder)) {
+        return 'noop';
+      }
       // All streets done - go to scoring
       tx.update(gameRef, {
         phase: GP.Scoring,
@@ -152,10 +181,10 @@ export async function advanceStreet(db: Firestore, roomId: string): Promise<'sco
     }
 
     // Read ALL deck docs first (Firestore requires all reads before writes)
-    // Only read decks for non-fouled players
+    // Only read decks for non-fouled, non-FL players (FL already holds all cards)
     const deckSnaps = new Map<string, Card[]>();
     for (const uid of game.playerOrder) {
-      if (game.players[uid].fouled) continue;
+      if (game.players[uid].fouled || game.players[uid].fantasyLand) continue;
       const deckSnap = await tx.get(db.doc(deckDoc(uid, roomId)));
       const deckData = parseDeckDoc(deckSnap.data());
       deckSnaps.set(uid, deckData.cards);
@@ -171,6 +200,11 @@ export async function advanceStreet(db: Firestore, roomId: string): Promise<'sco
       if (game.players[uid].fouled) {
         // Fouled players get no cards
         updatedPlayers[uid] = { ...game.players[uid], currentHand: [] };
+        continue;
+      }
+      if (game.players[uid].fantasyLand) {
+        // FL players keep their existing 14-card hand across streets
+        updatedPlayers[uid] = { ...game.players[uid] };
         continue;
       }
 
@@ -231,15 +265,23 @@ export async function scoreRound(db: Firestore, roomId: string): Promise<void> {
       roundResults[ps.uid] = { netScore: ps.netScore, fouled: ps.fouled };
     }
 
-    // Update game state
+    // Update game state. Fantasy Land for next round: entry is QQ+ on top,
+    // staying (already in FL) is trips top / quads+ bottom — never on a foul.
     const updatedPlayers: Record<string, PlayerState> = {};
     for (const uid of game.playerOrder) {
       const player = game.players[uid];
       const roundScore = roundResults[uid]?.netScore ?? 0;
+      const effFouled = fouls.get(uid) ?? false;
+      const nextFantasyLand = !effFouled && (
+        player.fantasyLand
+          ? staysInFantasyLand(player.board)
+          : qualifiesForFantasyLand(player.board)
+      );
       updatedPlayers[uid] = {
         ...player,
         currentHand: [],
         score: player.score + roundScore,
+        nextFantasyLand,
       };
     }
 
@@ -275,13 +317,16 @@ export async function resetForNextRound(db: Firestore, roomId: string): Promise<
 
     const updatedPlayers: Record<string, PlayerState> = {};
 
-    // Reset active players' boards/hands but keep scores
+    // Reset active players' boards/hands but keep scores. Fantasy Land earned
+    // last round (nextFantasyLand) becomes active for the round about to start.
     for (const uid of game.playerOrder) {
       updatedPlayers[uid] = {
         ...game.players[uid],
         board: emptyBoard(),
         currentHand: [],
         fouled: false,
+        fantasyLand: game.players[uid].nextFantasyLand ?? false,
+        nextFantasyLand: false,
       };
     }
 
@@ -293,6 +338,8 @@ export async function resetForNextRound(db: Firestore, roomId: string): Promise<
           board: emptyBoard(),
           currentHand: [],
           fouled: false,
+          fantasyLand: false,
+          nextFantasyLand: false,
         };
       }
     }
@@ -303,6 +350,7 @@ export async function resetForNextRound(db: Firestore, roomId: string): Promise<
       players: updatedPlayers,
       round: game.round + 1,
       phaseDeadline: null,
+      flDeadline: null,
       roundResults: FieldValue.delete(),
       updatedAt: Date.now(),
     });
@@ -334,6 +382,7 @@ export async function handlePhaseTimeout(db: Firestore, roomId: string): Promise
 
     const updatedPlayers: Record<string, PlayerState> = { ...game.players };
     let changed = false;
+    const flDeadlinePassed = game.flDeadline == null || game.flDeadline <= Date.now();
 
     for (const uid of game.playerOrder) {
       const player = game.players[uid];
@@ -341,6 +390,8 @@ export async function handlePhaseTimeout(db: Firestore, roomId: string): Promise
       // Skip if already placed or already fouled
       if (player.currentHand.length === 0) continue;
       if (player.fouled) continue;
+      // Fantasy Land players run on their own whole-round deadline
+      if (player.fantasyLand && !flDeadlinePassed) continue;
 
       const newBoard: Board = {
         top: [...player.board.top],
@@ -355,7 +406,10 @@ export async function handlePhaseTimeout(db: Firestore, roomId: string): Promise
         [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
       }
 
-      if (game.street === 1) {
+      if (player.fantasyLand) {
+        // FL: fill the whole board; the leftover card is the discard
+        autoPlaceCards(shuffled, newBoard, BOARD_CARD_COUNT);
+      } else if (game.street === 1) {
         // Initial deal: place all 5 cards into free slots
         autoPlaceCards(shuffled, newBoard, 5);
       } else {
@@ -374,11 +428,16 @@ export async function handlePhaseTimeout(db: Firestore, roomId: string): Promise
       console.log(`[Dealer] [${roomId}] Auto-placed cards for ${player.displayName || uid}`);
     }
 
-    if (changed) {
-      // Clear deadline to prevent re-processing
+    // If a Fantasy Land player is still placing (their deadline is later),
+    // re-arm the room timer at flDeadline instead of going idle — otherwise
+    // nothing would wake the room to auto-place them.
+    const flStillPending = !flDeadlinePassed && flPending(updatedPlayers, game.playerOrder);
+    const nextDeadline = flStillPending ? game.flDeadline! : null;
+
+    if (changed || game.phaseDeadline !== nextDeadline) {
       tx.update(gameRef, {
         players: updatedPlayers,
-        phaseDeadline: null,
+        phaseDeadline: nextDeadline,
         updatedAt: Date.now(),
       });
     }
@@ -428,13 +487,6 @@ export async function placeSingleBotCards(db: Firestore, roomId: string, botUid:
     const player = game.players[botUid];
     if (!player?.isBot || player.fouled || player.currentHand.length === 0) return false;
 
-    let decision;
-    if (game.street === 1) {
-      decision = botPlaceInitialDeal(player.currentHand, player.board);
-    } else {
-      decision = botPlaceStreet(player.currentHand, player.board);
-    }
-
     // Apply placements
     const newBoard: Board = {
       top: [...player.board.top],
@@ -442,8 +494,21 @@ export async function placeSingleBotCards(db: Firestore, roomId: string, botUid:
       bottom: [...player.board.bottom],
     };
 
-    for (const p of decision.placements) {
-      newBoard[p.row] = [...newBoard[p.row], p.card];
+    if (player.fantasyLand) {
+      // FL bot: rank-sort descending and fill bottom→middle→top, discarding
+      // the lowest card. Crude (can occasionally foul) but bots are fixtures.
+      const sorted = [...player.currentHand].sort((a, b) => b.rank - a.rank);
+      autoPlaceCards(sorted, newBoard, BOARD_CARD_COUNT);
+    } else {
+      let decision;
+      if (game.street === 1) {
+        decision = botPlaceInitialDeal(player.currentHand, player.board);
+      } else {
+        decision = botPlaceStreet(player.currentHand, player.board);
+      }
+      for (const p of decision.placements) {
+        newBoard[p.row] = [...newBoard[p.row], p.card];
+      }
     }
 
     const updatedPlayers: Record<string, PlayerState> = {

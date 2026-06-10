@@ -12,6 +12,7 @@ import {
   ROUNDS_PER_MATCH,
   MAX_PLAYERS,
   DEFAULT_MATCH_SETTINGS,
+  BOARD_CARD_COUNT,
 } from '../../shared/core/constants';
 import { gameDoc, handDoc, deckDoc } from '../../shared/core/firestore-paths';
 import { emptyBoard } from '../../shared/game-logic/board-utils';
@@ -263,8 +264,20 @@ export const placeCards = onCall({ maxInstances: 10 }, async (request) => {
       );
     }
 
-    // Validate placement count
-    if (game.street === 1) {
+    // Validate placement count. Fantasy Land players set the whole board in
+    // one submission (13 placed + 1 discarded from their 14-card hand),
+    // regardless of which street the rest of the table is on.
+    if (player.fantasyLand) {
+      if (placements.length !== BOARD_CARD_COUNT) {
+        throw new HttpsError(
+          'invalid-argument',
+          `Fantasy Land: must place exactly ${BOARD_CARD_COUNT} cards.`,
+        );
+      }
+      if (!discard) {
+        throw new HttpsError('invalid-argument', 'Must discard 1 card.');
+      }
+    } else if (game.street === 1) {
       if (placements.length !== INITIAL_DEAL_COUNT) {
         throw new HttpsError(
           'invalid-argument',
@@ -440,6 +453,9 @@ export const playAgain = onCall({ maxInstances: 10 }, async (request) => {
         currentHand: [],
         fouled: false,
         score: 0,
+        // Fantasy Land does not carry across matches
+        fantasyLand: false,
+        nextFantasyLand: false,
       };
       updatedPlayerOrder.push(pUid);
     }
@@ -452,6 +468,7 @@ export const playAgain = onCall({ maxInstances: 10 }, async (request) => {
       playerOrder: updatedPlayerOrder,
       roundResults: FieldValue.delete(),
       phaseDeadline: null,
+      flDeadline: FieldValue.delete(),
       // Clear all run-mode state — host must opt back in via Start
       runMode: FieldValue.delete(),
       totalRounds: ROUNDS_PER_MATCH,
