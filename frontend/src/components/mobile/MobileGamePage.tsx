@@ -181,10 +181,11 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
     bottom: canUndo ? placements.filter((p) => p.row === 'bottom').length : 0,
   };
 
-  const handleRowClick = async (row: Row) => {
-    if (selectedIndex === null || submitting) return;
-    // selectedIndex is a position into `availableHand`
-    const selected = availableHand[selectedIndex];
+  // Place a card from availableHand (by position) onto a row. Shared by the
+  // tap-row path (uses the current selection) and the drag-drop path.
+  const placeCardAt = async (availIndex: number, row: Row) => {
+    if (submitting) return;
+    const selected = availableHand[availIndex];
     if (!selected) return;
 
     const currentRowSize = mergedBoard[row].length;
@@ -226,6 +227,12 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
         setSubmitting(false);
       }
     }
+  };
+
+  const handleRowClick = (row: Row) => {
+    if (selectedIndex === null) return;
+    // selectedIndex is a position into `availableHand`
+    void placeCardAt(selectedIndex, row);
   };
 
   // Take a just-placed (not-yet-submitted) card back to hand.
@@ -360,6 +367,7 @@ export function MobileGamePage({ gameState, hand, uid, roomId, onLeaveRoom }: Mo
             placements={placements}
             submitting={submitting}
             cardWidthPx={playerCardW}
+            onDropCard={placeCardAt}
           />
         </div>
       </div>
