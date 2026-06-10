@@ -51,12 +51,11 @@ export function MobileHandArea({
 
   const handleCardClick = (index: number) => {
     if (submitting) return;
-    // A captured drag still ends in a synthetic click on the source card —
-    // swallow it so a drop doesn't immediately re-select a card.
-    if (justDraggedRef.current) {
-      justDraggedRef.current = false;
-      return;
-    }
+    // Some browsers still fire a click on the source card right after a drag —
+    // swallow it so a drop doesn't immediately re-select. Time-based (not a
+    // sticky flag) because when the click targets the wrapper instead, a flag
+    // would never clear and would eat the next genuine tap.
+    if (Date.now() - dragEndAtRef.current < 300) return;
     onSelectCard(selectedIndex === index ? null : index);
   };
 
@@ -64,22 +63,32 @@ export function MobileHandArea({
   // pressRef tracks a press that may become a drag; drag is set once the
   // pointer moves past DRAG_THRESHOLD and drives the floating ghost card.
   const pressRef = useRef<{ index: number; x: number; y: number } | null>(null);
-  const justDraggedRef = useRef(false);
+  const dragEndAtRef = useRef(0);
   const [drag, setDrag] = useState<{ index: number; x: number; y: number } | null>(null);
 
   const handlePointerDown = (index: number) => (e: React.PointerEvent<HTMLDivElement>) => {
     if (submitting) return;
     pressRef.current = { index, x: e.clientX, y: e.clientY };
-    e.currentTarget.setPointerCapture(e.pointerId);
+    // Deliberately NOT capturing the pointer here: capture retargets the
+    // press's eventual click at this wrapper instead of the card, which
+    // breaks tap-to-select. Capture starts only when a drag does (below).
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     const press = pressRef.current;
     if (!press) return;
+    if (e.buttons === 0) {
+      // Press already ended (released outside before we captured) — a stale
+      // pressRef would otherwise turn plain mouse hover into a drag.
+      pressRef.current = null;
+      return;
+    }
     if (!drag) {
       const dist = Math.hypot(e.clientX - press.x, e.clientY - press.y);
       if (dist < DRAG_THRESHOLD) return;
-      // Becoming a drag: select the card so the board rows light up as targets.
+      // Becoming a drag: capture so tracking continues outside the card, and
+      // select it so the board rows light up as targets.
+      e.currentTarget.setPointerCapture(e.pointerId);
       onSelectCard(press.index);
     }
     setDrag({ index: press.index, x: e.clientX, y: e.clientY });
@@ -89,7 +98,7 @@ export function MobileHandArea({
     const endedDrag = drag;
     pressRef.current = null;
     if (!endedDrag) return; // plain tap — the card's onClick handles selection
-    justDraggedRef.current = true;
+    dragEndAtRef.current = Date.now();
     const row = e.type === 'pointerup' ? rowAtPoint(e.clientX, e.clientY) : null;
     setDrag(null);
     if (row) {
