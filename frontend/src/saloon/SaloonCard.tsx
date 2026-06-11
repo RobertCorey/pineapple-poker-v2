@@ -1,7 +1,7 @@
 /**
  * Western-styled playing card for the Saloon mode. VENDORED layout from
- * components/CardComponent.tsx, restyled: cream stock, classic two-color
- * suits, plus a card-back variant for face-down deals.
+ * components/CardComponent.tsx, restyled: cream stock, four-color suits,
+ * plus a card-back variant for face-down deals.
  */
 import type { CSSProperties } from 'react';
 import type { Card } from './vendor/types.ts';
@@ -14,11 +14,13 @@ const SUIT_SYMBOL: Record<string, string> = {
   c: '♣',
 };
 
+/** Four-color deck, same suit colors as multiplayer: spades black, hearts
+ *  red, diamonds blue, clubs green — on cream western card stock. */
 const SUIT_COLOR: Record<string, string> = {
   s: 'text-stone-900',
-  c: 'text-stone-900',
   h: 'text-red-700',
-  d: 'text-red-700',
+  d: 'text-blue-700',
+  c: 'text-green-700',
 };
 
 export const CARD_ASPECT = 1.4;
