@@ -193,6 +193,16 @@ export function RoomSelector({ displayName, setDisplayName, signIn, onRoomJoined
           </div>
         </div>
 
+        {/* ---- Single player ---- */}
+        <a
+          href="?saloon=1"
+          data-testid="saloon-link"
+          className="lp-fade-up mt-3 w-full py-2.5 rounded-lg border border-amber-700/60 bg-amber-950/40 hover:bg-amber-900/50 text-amber-300 text-sm font-bold transition-colors flex items-center justify-center gap-2"
+          style={{ animationDelay: '360ms' }}
+        >
+          🤠 Single player — The Frontier Trail
+        </a>
+
         {/* ---- Footer ---- */}
         <div
           className="lp-fade-up text-center mt-5"

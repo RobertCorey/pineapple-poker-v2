@@ -35,7 +35,7 @@ npm install                       # One command installs all workspace deps
 ### Unit tests (no emulators needed)
 
 ```bash
-npm run test:unit                  # Shared logic + dealer unit tests
+npm run test:unit                  # Shared logic + frontend + dealer unit tests
 npm run test:dealer:unit           # Dealer unit tests only (dealer/src/dealer.test.ts)
 ```
 
@@ -45,6 +45,8 @@ Dealer unit tests (`dealer/src/dealer.test.ts`) use mocked Firestore and vitest 
 - Timeout callbacks: correct sequencing (e.g. handlePhaseTimeout before checkAndAdvance)
 
 Shared logic tests (`shared/`) use vitest to verify scoring, hand evaluation, and board utils.
+
+Frontend unit tests (`frontend/vitest.config.ts`, run from repo root) cover the single-player Saloon engine (`frontend/src/saloon/engine.test.ts` — shared-deck dealing, turn order, street advancement, scoring, match flow, bot-play legality) plus audio intensity.
 
 ### Integration tests (requires Firestore emulator)
 
@@ -73,7 +75,7 @@ npm test                           # Playwright E2E tests
 
 E2E tests are in `e2e/`. Each test generates a unique room code for isolation — no shared state between tests.
 
-`e2e/` has 11 specs. The default `npm test` suite runs 9 (`bot` + `stress` are always ignored via `playwright.config.ts`; production runs additionally ignore `scoring` + `sit-out`):
+`e2e/` has 12 specs. The default `npm test` suite runs 10 (`bot` + `stress` are always ignored via `playwright.config.ts`; production runs additionally ignore `scoring` + `sit-out`):
 - `00-warmup.spec.ts` — absorbs the worker browser's one-time cold-start cost
 - `happy-path.spec.ts` — 2-player full 3-round match, play again
 - `card-placement.spec.ts` — card placement UI, auto-submit, auto-discard
@@ -83,6 +85,7 @@ E2E tests are in `e2e/`. Each test generates a unique room code for isolation �
 - `resume-game.spec.ts` — player who lost the room URL rejoins via home-screen banner
 - `observer.spec.ts` — late joiner observes full match, promoted via play-again, 3-player game
 - `scoring.spec.ts` — foul penalty scores (+6/-6), pairwise breakdown, cumulative totals
+- `saloon.spec.ts` — single-player Saloon mode: campaign map gating, turn-based hand vs bot (client-only, no emulator state)
 - `bot.spec.ts`, `stress.spec.ts` — always ignored by config (manual / load testing)
 
 
@@ -188,6 +191,12 @@ Host sets settings in Lobby UI before starting. In dev mode, `?timeout=5000` URL
 Classic OFC Pineapple only: a 3-round match (`ROUNDS_PER_MATCH`). Unlike table OFC (max 3 players, turn-based, shared deck), this game deals each player their **own** shuffled 52-card deck and everyone places **simultaneously** against a shared street timer — which is what lets a room hold up to `MAX_PLAYERS` players with no waiting. Scoring is pairwise across all active players.
 
 A roguelike "Pineapple Run" mode existed and was removed (#64). `GameState` keeps its fields (`runMode`, `charms`, `mutations`, etc. in `shared/core/types.ts`) and `GamePhase.CharmPick` as **vestigial optional schema fields** so old prod Firestore docs still parse; `playAgain` scrubs them. Nothing writes them anymore.
+
+### Single-player Saloon mode ("The Frontier Trail")
+
+A separate, fully client-side single-player campaign at `/?saloon=1` (linked from the home screen). This one IS **traditional table OFC**: one shared 52-card deck, turn-based placement clockwise from the button, max 3 seats (3 × 17 = 51 cards). Old-West theme: a ladder of 5 locales (`frontend/src/saloon/campaign.ts`) with named bot characters in 3 skill tiers (greenhorn/gunslinger/outlaw — implemented as score jitter on the bot strategy), rising stakes ($/point), and a localStorage bankroll/unlock progression (`saloon_progress_v1`).
+
+Everything lives in `frontend/src/saloon/` and touches **no Firebase**: game logic is **vendored** (copied, not imported) from `shared/` and `dealer/src/bot-strategy.ts` into `frontend/src/saloon/vendor/` so the mode stays decoupled from the multiplayer stack. The turn-based engine is `frontend/src/saloon/engine.ts` (pure state-transition functions, unit-tested). If you fix a bug in shared scoring/hand-eval, check whether the vendored copy needs the same fix.
 
 ### Timeout = Auto-Place
 

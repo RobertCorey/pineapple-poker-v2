@@ -7,6 +7,7 @@ import { useResumableGame, LAST_ROOM_KEY } from './hooks/useResumableGame.ts';
 import { RoomSelector } from './components/RoomSelector.tsx';
 import { Lobby } from './components/Lobby.tsx';
 import { MobileGamePage } from './components/mobile/MobileGamePage.tsx';
+import { SaloonApp } from './saloon/SaloonApp.tsx';
 import { GamePhase } from '@shared/core/types';
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
@@ -46,6 +47,20 @@ function getRoomFromUrl(): string | null {
   return params.get('room') || null;
 }
 
+function getSaloonFromUrl(): boolean {
+  return new URLSearchParams(window.location.search).has('saloon');
+}
+
+function setSaloonInUrl(on: boolean) {
+  const url = new URL(window.location.href);
+  if (on) {
+    url.searchParams.set('saloon', '1');
+  } else {
+    url.searchParams.delete('saloon');
+  }
+  history.replaceState(null, '', url.toString());
+}
+
 function setRoomInUrl(roomId: string | null) {
   const url = new URL(window.location.href);
   if (roomId) {
@@ -59,12 +74,16 @@ function setRoomInUrl(roomId: string | null) {
 function App() {
   const { user, loading: authLoading, displayName, setDisplayName, signIn } = useAuth();
   const [roomId, setRoomId] = useState<string | null>(getRoomFromUrl);
+  const [saloonMode, setSaloonMode] = useState<boolean>(getSaloonFromUrl);
   const { gameState, loading: gameLoading } = useGameState(roomId);
   const hand = usePlayerHand(user?.uid, roomId);
   const { resumable, dismiss: dismissResumable } = useResumableGame(user?.uid, !roomId);
   // Sync URL on popstate (back/forward)
   useEffect(() => {
-    const onPopState = () => setRoomId(getRoomFromUrl());
+    const onPopState = () => {
+      setRoomId(getRoomFromUrl());
+      setSaloonMode(getSaloonFromUrl());
+    };
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
@@ -88,6 +107,18 @@ function App() {
     setRoomId(null);
     setRoomInUrl(null);
   };
+
+  // Single-player saloon mode — fully client-side, no auth or room needed.
+  if (saloonMode) {
+    return (
+      <SaloonApp
+        onExit={() => {
+          setSaloonInUrl(false);
+          setSaloonMode(false);
+        }}
+      />
+    );
+  }
 
   if (authLoading) {
     return (
