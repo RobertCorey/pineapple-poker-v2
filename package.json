@@ -27,7 +27,7 @@
     "test:dealer:integration": "npm run test:integration -w dealer"
   },
   "devDependencies": {
-    "@playwright/test": "^1.58.2",
+    "@playwright/test": "^1.60.0",
     "vitest": "^4.0.18"
   }
 }
